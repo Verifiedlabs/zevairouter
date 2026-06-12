@@ -1,0 +1,7 @@
+# Development files not needed in published package
+node_modules/
+.build-home/
+scripts/
+.gitignore
+package-lock.json
+
