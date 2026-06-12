@@ -78,7 +78,7 @@
     "tailwindcss": "^4"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "keywords": [
     "ai",
