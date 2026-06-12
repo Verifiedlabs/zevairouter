@@ -22,6 +22,18 @@ function ensureLinkedDir(source, destination) {
 ensureLinkedDir(path.join(projectRoot, ".next", "static"), path.join(standaloneRoot, ".next", "static"));
 ensureLinkedDir(path.join(projectRoot, "public"), path.join(standaloneRoot, "public"));
 
+// Playwright loads browsers.json + its browser registry through dynamic paths that
+// Next's file tracer can't follow, so the packages can be omitted from the standalone
+// bundle (error: "Cannot find module .../playwright-core/browsers.json"). Link the
+// fully-installed packages into the standalone node_modules so browser automation
+// works the same as it does under `npm run dev`.
+for (const pkg of ["playwright", "playwright-core"]) {
+  ensureLinkedDir(
+    path.join(projectRoot, "node_modules", pkg),
+    path.join(standaloneRoot, "node_modules", pkg)
+  );
+}
+
 // Bind to all network interfaces by default so the server is reachable from the
 // LAN / behind a reverse proxy or tunnel — not just localhost. Override with the
 // HOSTNAME and PORT env vars if you need to restrict it.

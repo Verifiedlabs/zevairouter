@@ -13,13 +13,22 @@ const proxyClientMaxBodySize = process.env.NINEROUTER_PROXY_CLIENT_MAX_BODY_SIZE
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   output: "standalone",
-  serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite"],
+  serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite", "playwright", "playwright-core"],
   turbopack: {
     root: tracingRoot
   },
   outputFileTracingRoot: tracingRoot,
   outputFileTracingExcludes: {
     "*": ["./gitbook/**/*"]
+  },
+  outputFileTracingIncludes: {
+    // Playwright loads browsers.json + its browser registry through dynamic paths the
+    // Next file tracer can't follow, so force-include the full packages in the standalone
+    // build (otherwise: "Cannot find module .../playwright-core/browsers.json").
+    "*": [
+      "./node_modules/playwright-core/**/*",
+      "./node_modules/playwright/**/*"
+    ]
   },
   images: {
     unoptimized: true
