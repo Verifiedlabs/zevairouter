@@ -115,10 +115,32 @@ function normalizeCodeBuddyMessages(messages) {
   return next;
 }
 
+// Re-establish Anthropic-style prompt caching for the CodeBuddy path.
+// claude-* models served through CodeBuddy lose their cache_control breakpoints
+// during the claude->openai translation, so the full conversation prefix is
+// re-billed as fresh input tokens on every turn. Marking the end of the stable
+// context prefix with an ephemeral cache breakpoint lets the Anthropic-backed
+// upstream serve the repeated prefix as a cache read instead of full-price input.
+// Upstreams that do not understand cache_control simply ignore the extra field.
+function applyCodeBuddyPromptCache(messages) {
+  if (!Array.isArray(messages)) return messages;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg && Array.isArray(msg.content) && msg.content.length > 0) {
+      const last = msg.content[msg.content.length - 1];
+      if (last && typeof last === "object" && !last.cache_control) {
+        last.cache_control = { type: "ephemeral" };
+      }
+      break;
+    }
+  }
+  return messages;
+}
+
 function buildCodeBuddyBody(model, transformed, maxTokens, maxCompletionTokens) {
   const body = {
     model,
-    messages: normalizeCodeBuddyMessages(transformed.messages),
+    messages: applyCodeBuddyPromptCache(normalizeCodeBuddyMessages(transformed.messages)),
     stream: true,
   };
   for (const field of CODEBUDDY_ALLOWED_REQUEST_FIELDS) {
