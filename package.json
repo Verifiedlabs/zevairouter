@@ -1,5 +1,5 @@
 {
-  "name": "wyxrouter",
+  "name": "zevairouter",
   "version": "0.4.74",
   "description": "WYx0 fork of 9Router - AI Router with Kiro/CodeBuddy automation and quota tracking",
   "bin": {
@@ -95,7 +95,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Wisyam/9router_wyx0"
+    "url": "https://github.com/Verifiedlabs/zevairouter"
   },
   "homepage": "https://9router.com"
 }
