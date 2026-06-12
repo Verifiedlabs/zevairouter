@@ -204,7 +204,7 @@ export default function Sidebar({ onClose }) {
             >
               <span className="material-symbols-outlined text-[18px]">perm_media</span>
               <span className="text-[13px] font-medium flex-1 text-left">Media Providers</span>
-              <span className="material-symbols-outlined text-[14px] transition-transform" style= transform: mediaOpen ? "rotate(180deg)" : "rotate(0deg)" >
+              <span className={cn("material-symbols-outlined text-[14px] transition-transform", mediaOpen && "rotate-180")}>
                 expand_more
               </span>
             </button>
