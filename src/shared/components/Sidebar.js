@@ -121,7 +121,11 @@ export default function Sidebar({ onClose }) {
         <div className="px-6 py-4 flex flex-col gap-2">
           <Link href="/dashboard" className="flex items-center gap-3">
             <div className="flex items-center justify-center size-9 rounded-[10px] bg-gradient-to-br from-brand-500 to-brand-700 shadow-[var(--shadow-warm)]">
-              <span className="material-symbols-outlined text-white text-[20px]">hub</span>
+              <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5">
+                <path d="M9.5 11H22.5L9.5 21H22.5" fill="none" stroke="white" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="9.5" cy="11" r="2.5" fill="white"/>
+                <circle cx="22.5" cy="21" r="2.5" fill="white"/>
+              </svg>
             </div>
             <div className="flex flex-col">
               <h1 className="text-lg font-semibold tracking-tight text-text-main">
@@ -200,7 +204,7 @@ export default function Sidebar({ onClose }) {
             >
               <span className="material-symbols-outlined text-[18px]">perm_media</span>
               <span className="text-[13px] font-medium flex-1 text-left">Media Providers</span>
-              <span className="material-symbols-outlined text-[14px] transition-transform" style={{ transform: mediaOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+              <span className="material-symbols-outlined text-[14px] transition-transform" style= transform: mediaOpen ? "rotate(180deg)" : "rotate(0deg)" >
                 expand_more
               </span>
             </button>
