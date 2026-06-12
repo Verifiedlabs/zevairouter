@@ -7,6 +7,7 @@ import Badge from "./Badge";
 import Button from "./Button";
 import Input from "./Input";
 import Modal from "./Modal";
+import Select from "./Select";
 
 const DEFAULT_CONCURRENCY = 4;
 const ACTIVE_JOB_STATUSES = new Set(["queued", "running", "needs_manual"]);
@@ -67,6 +68,8 @@ export default function BulkAccountAutomationModal({
   const completedRefreshJobsRef = useRef(new Set());
   const [bulkText, setBulkText] = useState("");
   const [concurrency, setConcurrency] = useState(String(DEFAULT_CONCURRENCY));
+  const [proxyPoolSelection, setProxyPoolSelection] = useState("");
+  const [proxyPools, setProxyPools] = useState([]);
   const [activeJob, setActiveJob] = useState(null);
   const [error, setError] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -74,6 +77,24 @@ export default function BulkAccountAutomationModal({
 
   const runningJob = activeJob && ACTIVE_JOB_STATUSES.has(activeJob.status);
   const finishedJob = activeJob && TERMINAL_JOB_STATUSES.has(activeJob.status);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const fetchPools = async () => {
+      try {
+        const res = await fetch("/api/proxy-pools?isActive=true", { cache: "no-store" });
+        const data = await res.json();
+        if (!cancelled && res.ok) {
+          setProxyPools(data.proxyPools || []);
+        }
+      } catch {
+        // Proxy pools are optional; silently ignore fetch errors
+      }
+    };
+    void fetchPools();
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   const groupedAccounts = useMemo(() => {
     const groups = new Map();
@@ -92,6 +113,7 @@ export default function BulkAccountAutomationModal({
   const resetState = useCallback(() => {
     setBulkText("");
     setConcurrency(String(DEFAULT_CONCURRENCY));
+    setProxyPoolSelection("");
     setActiveJob(null);
     setError(null);
     setImporting(false);
@@ -180,12 +202,24 @@ export default function BulkAccountAutomationModal({
     setJobRestoreNotice(null);
 
     try {
+      // Resolve proxy pool mode from selection
+      let proxyPoolMode = "none";
+      let proxyPoolId = null;
+      if (proxyPoolSelection === "all") {
+        proxyPoolMode = "all";
+      } else if (proxyPoolSelection && proxyPoolSelection !== "") {
+        proxyPoolMode = "single";
+        proxyPoolId = proxyPoolSelection;
+      }
+
       const res = await fetch(`/api/oauth/${provider}/bulk-import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accounts: lines,
           concurrency: Number.parseInt(concurrency, 10) || DEFAULT_CONCURRENCY,
+          proxyPoolMode,
+          proxyPoolId,
         }),
       });
       const data = await res.json();
@@ -289,6 +323,27 @@ export default function BulkAccountAutomationModal({
                 Default 4. Allowed range: 1 to 8 workers.
               </p>
             </div>
+
+            <Select
+              label="Proxy Pool"
+              value={proxyPoolSelection}
+              onChange={(event) => setProxyPoolSelection(event.target.value)}
+              placeholder="No Proxy (direct connection)"
+              hint={
+                proxyPoolSelection === "all"
+                  ? `Round-robin across ${proxyPools.length} active pool${proxyPools.length === 1 ? "" : "s"}. Each account gets a different proxy.`
+                  : proxyPoolSelection
+                    ? "All accounts will use this proxy."
+                    : "Optional. Assign proxies to accounts for IP rotation."
+              }
+              options={[
+                { value: "all", label: `All Active Pools (${proxyPools.length})` },
+                ...proxyPools.map((pool) => ({
+                  value: pool.id,
+                  label: pool.name || pool.proxyUrl,
+                })),
+              ]}
+            />
           </>
         )}
 
@@ -404,6 +459,13 @@ export default function BulkAccountAutomationModal({
                             <p className="text-[11px] uppercase tracking-wide text-text-muted">Current Step</p>
                             <p className="mt-1 text-sm font-medium capitalize">{formatStepLabel(account.currentStep)}</p>
                           </div>
+
+                          {account.proxyUrl && (
+                            <div className="mt-2 flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-[14px] text-text-muted">vpn_lock</span>
+                              <p className="truncate font-mono text-[11px] text-text-muted">{account.proxyUrl}</p>
+                            </div>
+                          )}
 
                           {account.error && (
                             <p className="mt-3 text-xs text-red-500">{account.error}</p>

@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR } from "../../dataDir.js";
+import { getProxyPoolById, getProxyPools } from "../../../models/index.js";
 import { KiroService } from "./kiro.js";
 import { createKiroCallbackMonitor, runKiroGoogleAutomation } from "./kiroGoogleAutomation.js";
 
@@ -158,6 +159,23 @@ function buildJobActivity(accounts) {
     .slice(-MAX_JOB_ACTIVITY_ENTRIES);
 }
 
+function maskProxyUrl(proxyUrl) {
+  if (!proxyUrl) return null;
+  try {
+    const url = new URL(proxyUrl);
+    if (url.username || url.password) {
+      url.username = "***";
+      url.password = "***";
+    }
+    return url.toString();
+  } catch {
+    // If not a valid URL, just mask middle portion
+    return proxyUrl.length > 20
+      ? `${proxyUrl.slice(0, 10)}***${proxyUrl.slice(-10)}`
+      : proxyUrl;
+  }
+}
+
 function sanitizeAccount(account) {
   return {
     email: account.email,
@@ -166,6 +184,7 @@ function sanitizeAccount(account) {
     connectionId: account.connectionId || null,
     workerId: account.workerId || null,
     line: account.line,
+    proxyUrl: maskProxyUrl(account.proxyUrl) || null,
     currentStep: account.currentStep || null,
     updatedAt: account.updatedAt || null,
     logs: (account.logs || []).slice(-8),
@@ -234,8 +253,9 @@ async function defaultSocialExchange(args) {
   return exchangeAndSaveKiroSocialConnection(args);
 }
 
-export async function createFreshContext(browser) {
-  const context = await browser.newContext();
+export async function createFreshContext(browser, proxy) {
+  const contextOptions = proxy ? { proxy: { server: proxy } } : {};
+  const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
   return { context, page };
 }
@@ -302,7 +322,7 @@ export class KiroBulkImportManager {
     this.latestJobId = readPersistedLatestJobId(this.metaFile);
   }
 
-  async startJob({ accounts, concurrency }) {
+  async startJob({ accounts, concurrency, proxyPoolMode, proxyPoolId }) {
     const { parsed, invalidLines } = parseKiroBulkAccounts(accounts);
     if (!parsed.length) {
       const error = invalidLines.length > 0
@@ -318,12 +338,26 @@ export class KiroBulkImportManager {
       throw Object.assign(new Error(error), { error, invalidLines });
     }
 
+    // Resolve proxy pool URLs for round-robin assignment
+    let proxyUrls = [];
+    if (proxyPoolMode === "all") {
+      const pools = await getProxyPools({ isActive: true });
+      proxyUrls = pools.map((p) => p.proxyUrl).filter(Boolean);
+    } else if (proxyPoolMode === "single" && proxyPoolId) {
+      const pool = await getProxyPoolById(proxyPoolId);
+      if (pool?.isActive && pool?.proxyUrl) {
+        proxyUrls = [pool.proxyUrl];
+      }
+    }
+
     const jobId = randomUUID();
     const createdAt = nowIso();
     const job = {
       jobId,
       status: "running",
       concurrency: clampConcurrency(concurrency),
+      proxyPoolMode: proxyPoolMode || "none",
+      proxyUrls,
       createdAt,
       startedAt: createdAt,
       finishedAt: null,
@@ -339,6 +373,7 @@ export class KiroBulkImportManager {
         line: account.line,
         email: account.email,
         password: account.password,
+        proxyUrl: null,
         status: "queued",
         error: null,
         connectionId: null,
@@ -452,7 +487,11 @@ export class KiroBulkImportManager {
       account.status = "running";
       account.workerId = workerId;
       account.error = null;
-      appendAccountLog(account, "worker_assigned", `Worker ${workerId} picked up this account`);
+      // Assign proxy via round-robin from the resolved pool
+      if (job.proxyUrls?.length) {
+        account.proxyUrl = job.proxyUrls[(job.nextIndex - 1) % job.proxyUrls.length];
+      }
+      appendAccountLog(account, "worker_assigned", `Worker ${workerId} picked up this account${account.proxyUrl ? ` (proxy: ${maskProxyUrl(account.proxyUrl)})` : ""}`);
       void this.persistJobSnapshot(job, { forcePreview: false });
       return account;
     }
@@ -598,7 +637,7 @@ export class KiroBulkImportManager {
 
     const kiroService = this.kiroServiceFactory();
     const socialAuth = kiroService.createSocialAuthorization("google");
-    const { context, page } = await createFreshContext(job.browser);
+    const { context, page } = await createFreshContext(job.browser, account.proxyUrl);
     const callbackPromise = createKiroCallbackMonitor(context, page);
     account.runtimeSession = { context, page };
 
@@ -775,4 +814,5 @@ export const __test__ = {
   buildSummary,
   isRecentTerminalJob,
   buildLookupResponse,
+  maskProxyUrl,
 };
