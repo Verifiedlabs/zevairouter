@@ -527,12 +527,12 @@ button {
 }
 .card-3d > * { position: relative; z-index: 1; }
 .card-3d:hover {
-  transform: perspective(1200px) translateY(-5px) rotateX(2.4deg) rotateY(-2.4deg) scale(1.012);
+  transform: perspective(1200px) translateY(-3px) rotateX(1deg) rotateY(-1deg);
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
     0 2px 4px rgba(15, 23, 42, 0.06),
-    0 18px 40px -12px rgba(229, 106, 74, 0.28),
-    0 40px 70px -30px rgba(15, 23, 42, 0.30);
+    0 14px 32px -14px rgba(229, 106, 74, 0.22),
+    0 32px 60px -32px rgba(15, 23, 42, 0.24);
 }
 .card-3d-elev {
   box-shadow:
@@ -557,8 +557,8 @@ button {
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.09),
     0 2px 4px rgba(0, 0, 0, 0.5),
-    0 20px 44px -12px rgba(229, 106, 74, 0.35),
-    0 44px 80px -30px rgba(0, 0, 0, 0.7);
+    0 16px 36px -14px rgba(229, 106, 74, 0.3),
+    0 36px 64px -32px rgba(0, 0, 0, 0.7);
 }
 .dark .card-3d-elev {
   box-shadow:
@@ -571,5 +571,5 @@ button {
 /* Respect reduced-motion: keep depth, drop the tilt/scale animation */
 @media (prefers-reduced-motion: reduce) {
   .card-3d { transition: box-shadow 0.3s ease; }
-  .card-3d:hover { transform: perspective(1200px) translateY(-3px); }
+  .card-3d:hover { transform: perspective(1200px) translateY(-2px); }
 }
