@@ -72,7 +72,7 @@ npm run start
   - **开发模式：** `npm run dev`
   - **生产 / standalone：** `npm run start`
 
-> **注意：** 较早的 standalone 构建可能会以 `Cannot find module .../playwright-core/browsers.json` 报错。此问题现已修复 —— standalone 构建会强制包含 Playwright 包（`next.config.mjs` 中的 `serverExternalPackages` + `outputFileTracingIncludes`），启动脚本会将它们链接到 `.next/standalone/node_modules`（`scripts/start-standalone.mjs`）。
+> **注意：** 较早的 standalone 构建可能会以 `Cannot find module .../playwright-core/browsers.json` 报错，或者在批量导入时报出误导性的 `playwright installed but cannot be required` 错误（即使 Playwright 已正确安装）。两个问题现均已修复 —— standalone 构建会强制包含 Playwright 包 **以及** `cli/hooks` 运行时助手（`next.config.mjs` 中的 `serverExternalPackages` + `outputFileTracingIncludes`），启动脚本会将 Playwright 包链接到 `.next/standalone/node_modules`（`scripts/start-standalone.mjs`），且批量导入启动器（`bulkImportBrowserEngine.js`）会在回退到运行时助手之前先直接 `import` Playwright。
 
 ## 🌐 公网访问 / 部署
 
