@@ -138,19 +138,52 @@ function CodeBuddyBulkTokenModal({ isOpen, onClose, onSuccess }) {
 
   if (!isOpen) return null;
 
-  const successMsg = result?.success
-    ? `Imported ${result.imported}/${result.total} tokens.${result.failed ? ` ${result.failed} failed.` : ""}`
-    : null;
+  // Build detailed success message with format breakdown
+  let successMsg = null;
+  if (result?.success) {
+    const parts = [`Imported ${result.imported}/${result.total} tokens.`];
+    if (result.failed) parts.push(`${result.failed} failed.`);
+
+    // Show format breakdown if available
+    if (result.formatCounts) {
+      const { "access-only": ao, "with-refresh": wr, "with-api-key": wa } = result.formatCounts;
+      const breakdown = [];
+      if (wa) breakdown.push(`${wa} with API key`);
+      if (wr) breakdown.push(`${wr} with refresh token`);
+      if (ao) breakdown.push(`${ao} access-only`);
+      if (breakdown.length) parts.push(`(${breakdown.join(", ")})`);
+    }
+
+    successMsg = parts.join(" ");
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div className="w-full max-w-lg rounded-xl border border-border bg-surface p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h3 className="mb-4 text-lg font-semibold text-text-main">CodeBuddy Bulk Token Import</h3>
-        <p className="mb-3 text-xs text-text-muted">Paste access tokens, one per line. Each token will be validated and imported as a connection.</p>
+        <h3 className="mb-4 text-lg font-semibold text-text-main">CodeBuddy OAuth Token Import</h3>
+        <p className="mb-2 text-xs text-text-muted">Paste CodeBuddy OAuth tokens, one per line. Supports three formats:</p>
+        <div className="mb-3 space-y-2 rounded-lg bg-background/50 p-3 text-xs text-text-muted">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[16px] text-primary leading-none">check_circle</span>
+            <span className="flex items-center gap-1.5"><code className="text-[10px] bg-border/50 px-1.5 py-0.5 rounded leading-none">accessToken</code><span>— access token only (24h expiry)</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[16px] text-primary leading-none">check_circle</span>
+            <span className="flex items-center gap-1.5"><code className="text-[10px] bg-border/50 px-1.5 py-0.5 rounded leading-none">accessToken:refreshToken</code><span>— enables auto-refresh</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[16px] text-primary leading-none">check_circle</span>
+            <span className="flex items-center gap-1.5"><code className="text-[10px] bg-border/50 px-1.5 py-0.5 rounded leading-none">accessToken:refreshToken:apiKey</code><span>— 365-day access</span></span>
+          </div>
+        </div>
         <textarea
           className="mb-3 w-full rounded-lg border border-border bg-background p-3 font-mono text-xs text-text-main placeholder:text-text-muted focus:border-primary focus:outline-none"
           rows={8}
-          placeholder={"eyJhbGciOiJSUzI1NiIs...\neyJhbGciOiJSUzI1NiIs...\neyJhbGciOiJSUzI1NiIs..."}
+          placeholder={
+            "eyJhbGciOiJSUzI1NiIs...\n" +
+            "eyJhbGciOiJSUzI1NiIs...:eyJhbGciOiJSUzI1NiIs...\n" +
+            "eyJhbGciOiJSUzI1NiIs...:eyJhbGciOiJSUzI1NiIs...:ak_abc123..."
+          }
           value={tokens}
           onChange={(e) => setTokens(e.target.value)}
           disabled={loading}
@@ -191,10 +224,10 @@ function CodeBuddyAutomationPanel({ providerInfo, onRefresh }) {
         >
           <span className="flex items-center gap-2 text-sm font-semibold text-text-main">
             <span className="material-symbols-outlined text-[20px] text-primary">group_add</span>
-            Auto Login Bulk
+            Auto Login + Generate Key
           </span>
           <span className="text-xs leading-relaxed text-text-muted">
-            Run bulk GSuite gmail|password login with worker progress and manual assist.
+            Run bulk GSuite gmail|password login, create a CodeBuddy Access Key, and save it for model calls.
           </span>
         </button>
         <button
@@ -204,10 +237,10 @@ function CodeBuddyAutomationPanel({ providerInfo, onRefresh }) {
         >
           <span className="flex items-center gap-2 text-sm font-semibold text-text-main">
             <span className="material-symbols-outlined text-[20px] text-primary">playlist_add</span>
-            Bulk Token Import
+            OAuth Token Import
           </span>
           <span className="text-xs leading-relaxed text-text-muted">
-            Paste multiple access tokens directly. No browser needed.
+            Paste OAuth tokens with optional refresh tokens and API keys for extended access.
           </span>
         </button>
         <button
@@ -220,7 +253,7 @@ function CodeBuddyAutomationPanel({ providerInfo, onRefresh }) {
             Device OAuth Login
           </span>
           <span className="text-xs leading-relaxed text-text-muted">
-            Open CodeBuddy browser login and poll until the access token is saved.
+            Open CodeBuddy browser login and poll until the OAuth token is saved.
           </span>
         </button>
       </div>
@@ -232,7 +265,7 @@ function CodeBuddyAutomationPanel({ providerInfo, onRefresh }) {
       <BulkAccountAutomationModal
         isOpen={isBulkOpen}
         provider="codebuddy"
-        title="CodeBuddy Bulk GSuite Login"
+        title="CodeBuddy Bulk GSuite Login + Access Key"
         serviceName="CodeBuddy"
         onSuccess={onRefresh}
         onClose={() => setIsBulkOpen(false)}
@@ -246,6 +279,62 @@ function CodeBuddyAutomationPanel({ providerInfo, onRefresh }) {
           setIsOpen(false);
         }}
         onClose={() => setIsOpen(false)}
+      />
+    </>
+  );
+}
+
+function QoderAutomationPanel({ providerInfo, onRefresh }) {
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [isOAuthOpen, setIsOAuthOpen] = useState(false);
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => setIsBulkOpen(true)}
+          className="flex min-h-[112px] min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-text-main">
+            <span className="material-symbols-outlined text-[20px] text-primary">group_add</span>
+            Auto Login Bulk
+          </span>
+          <span className="text-xs leading-relaxed text-text-muted">
+            Run bulk gmail:password or gmail|password automation via Google SSO with Qoder device flow.
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsOAuthOpen(true)}
+          className="flex min-h-[112px] min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-text-main">
+            <span className="material-symbols-outlined text-[20px] text-primary">login</span>
+            Device OAuth Login
+          </span>
+          <span className="text-xs leading-relaxed text-text-muted">
+            Open Qoder device login in browser and poll until the token is saved.
+          </span>
+        </button>
+      </div>
+      <BulkAccountAutomationModal
+        isOpen={isBulkOpen}
+        provider="qoder"
+        title="Qoder Bulk GSuite Auto Login"
+        serviceName="Qoder"
+        onSuccess={onRefresh}
+        onClose={() => setIsBulkOpen(false)}
+      />
+      <OAuthModal
+        isOpen={isOAuthOpen}
+        provider="qoder"
+        providerInfo={providerInfo}
+        onSuccess={() => {
+          onRefresh?.();
+          setIsOAuthOpen(false);
+        }}
+        onClose={() => setIsOAuthOpen(false)}
       />
     </>
   );
@@ -267,6 +356,14 @@ const AUTOMATION_PROVIDERS = [
     description: "Bulk GSuite automation and browser OAuth polling login.",
     supportedModes: ["bulk-account", "device-oauth"],
     component: CodeBuddyAutomationPanel,
+  },
+  {
+    id: "qoder",
+    label: "Qoder",
+    icon: "code",
+    description: "Bulk GSuite auto login via Google SSO and device flow.",
+    supportedModes: ["bulk-account", "device-oauth"],
+    component: QoderAutomationPanel,
   },
 ];
 
