@@ -70,6 +70,11 @@ async function initAdapter() {
 
   const { runMigrationOnce } = await import("./migrate.js");
   await runMigrationOnce(adapter);
+
+  // Reclaim legacy bloat once + keep usageHistory bounded going forward.
+  const { runStartupMaintenanceOnce } = await import("./maintenance.js");
+  runStartupMaintenanceOnce(adapter);
+
   return adapter;
 }
 
