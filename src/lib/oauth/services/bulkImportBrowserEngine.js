@@ -19,23 +19,52 @@ function loadRuntimeHelper(name) {
   }
 }
 
+async function importPlaywright() {
+  const playwright = await import("playwright");
+  return playwright.chromium ?? playwright.default?.chromium ?? null;
+}
+
 async function launchChromium({ proxyUrl } = {}) {
-  const runtime = loadRuntimeHelper("playwrightRuntime");
-  if (runtime?.ensurePlaywrightRuntime) {
-    const ready = runtime.ensurePlaywrightRuntime({ silent: false });
-    if (!ready.ok && ready.error) throw ready.error;
+  // Try the real import FIRST. In the bundled standalone server this resolves
+  // playwright correctly (Next externalizes it), whereas the runtime helper's
+  // internal require() can return a false negative. We only consult the helper
+  // if the direct import genuinely fails.
+  let chromium = null;
+  let importErr = null;
+  try {
+    chromium = await importPlaywright();
+  } catch (err) {
+    importErr = err;
   }
 
-  let chromium;
-  try {
-    const playwright = await import("playwright");
-    chromium = playwright.chromium;
-  } catch (err) {
+  if (!chromium) {
+    const runtime = loadRuntimeHelper("playwrightRuntime");
+    if (runtime?.ensurePlaywrightRuntime) {
+      const ready = runtime.ensurePlaywrightRuntime({ silent: false });
+      if (ready.ok) {
+        // Helper may have lazily installed playwright / downloaded chromium.
+        try {
+          chromium = await importPlaywright();
+        } catch (err) {
+          importErr = err;
+        }
+        if (!chromium) {
+          const mod = ready.module || runtime.loadPlaywrightModule?.();
+          chromium = mod?.chromium ?? null;
+        }
+      } else if (ready.error) {
+        if (importErr) ready.error.cause = importErr;
+        throw ready.error;
+      }
+    }
+  }
+
+  if (!chromium) {
     const friendly = new Error(
       `Playwright is not installed. Run "npm install -g playwright && npx playwright install chromium" or restart the bulk import to auto-install.`
     );
     friendly.code = "PLAYWRIGHT_PACKAGE_MISSING";
-    friendly.cause = err;
+    friendly.cause = importErr;
     throw friendly;
   }
 
