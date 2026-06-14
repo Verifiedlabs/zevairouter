@@ -105,7 +105,7 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
 
   // Determine effective status (override unavailable if cooldown expired)
   const effectiveStatus = (connection.testStatus === "unavailable" && !isCooldown)
-    ? "active"  // Cooldown expired u2192 treat as active
+    ? "active"  // Cooldown expired → treat as active
     : connection.testStatus;
   const classifiedStatus = classifyConnectionStatus(connection);
 
@@ -171,6 +171,14 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
               <Badge variant={proxyBadgeVariant} size="sm">
                 Proxy
               </Badge>
+            )}
+            {connection.autoDisabledAt && (
+              <span className="text-[10px] text-text-muted">
+                {connection.autoDisabledReason === "token_expired" ? "Token expired" :
+                 connection.autoDisabledReason === "banned" ? "Banned" :
+                 connection.autoDisabledReason === "quota_exhausted" ? "Quota exhausted" :
+                 "Auto-disabled"} — {new Date(connection.autoDisabledAt).toLocaleDateString()}
+              </span>
             )}
             {isCooldown && connection.isActive !== false && <CooldownTimer until={modelLockUntil} />}
             {connection.lastError && connection.isActive !== false && (
