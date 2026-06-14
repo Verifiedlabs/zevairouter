@@ -17,6 +17,8 @@ const NEXT_BUTTON_SELECTORS = [
 const APPROVE_BUTTON_SELECTORS = [
   '#submit_approve_access',
   '#submit_approve_access button',
+  '#confirm',
+  'form#tos_form input[type="submit"]',
   'button[jsname]:has-text("Allow")',
   'button:has-text("Allow")',
   '[role="button"]:has-text("Allow")',
@@ -101,8 +103,8 @@ const PRIVACY_CONFIRM_BUTTON_SELECTORS = [
   'button:has-text("Confirm")',
   'button:has-text("I agree")',
   'button:has-text("Agree")',
-  'button:has-text("同意")',
-  'button:has-text("确认")',
+  'button:has-text("\u540c\u610f")',
+  'button:has-text("\u786e\u8ba4")',
 ];
 
 const PROVIDER_ONBOARDING_ACTION_SELECTORS = [
@@ -173,9 +175,9 @@ const INVALID_CREDENTIAL_MARKERS = [
   "wrong password",
   "incorrect password",
   "couldn't find your google account",
-  "couldn’t find your google account",
+  "couldn\u2019t find your google account",
   "enter a valid email",
-  "couldn’t sign you in",
+  "couldn\u2019t sign you in",
   "couldn't sign you in",
   "invalid email or password",
   "password is incorrect",
@@ -184,10 +186,10 @@ const INVALID_CREDENTIAL_MARKERS = [
 const MANUAL_ASSIST_MARKERS = [
   "2-step verification",
   "2-step verification required",
-  "verify it’s you",
+  "verify it\u2019s you",
   "verify it's you",
   "check your phone",
-  "confirm it’s you",
+  "confirm it\u2019s you",
   "confirm it's you",
   "recovery email",
   "recovery phone",
@@ -233,6 +235,15 @@ const GOOGLE_ONBOARDING_MARKERS = [
   "tambahkan nomor telepon pemulihan",
   "choose your settings",
   "pilih setelan anda",
+];
+
+const GOOGLE_WORKSPACE_WELCOME_MARKERS = [
+  "welcome to your new account",
+  "selamat datang di akun baru",
+  "your administrator decides which",
+  "administrator anda memutuskan layanan",
+  "your organisation administrator manages",
+  "your organization administrator manages",
 ];
 
 const KIRO_CALLBACK_PREFIX = "kiro://kiro.kiroAgent/authenticate-success";
@@ -425,6 +436,47 @@ async function handleGoogleOnboarding(page, pageText) {
   }).catch(() => null);
   await page.waitForTimeout(500);
 
+  // Workspace welcome ("Welcome to your new account" for @domain.com) has
+  // only one valid action: the primary "I understand" button. There is no
+  // skip option \u2014 clicking nothing leaves the worker stuck polling forever
+  // while the headless tab sits on the consent screen. Prioritise the
+  // primary action selector before the generic skip pass so we don't fall
+  // through to a non-existent "Not now" link.
+  if (includesAny(text, GOOGLE_WORKSPACE_WELCOME_MARKERS)) {
+    const acknowledged = await clickFirstActionable(page, APPROVE_BUTTON_SELECTORS);
+    if (acknowledged) {
+      await page.waitForTimeout(700);
+      return true;
+    }
+    const submittedFromDom = await page.evaluate(() => {
+      const candidates = [
+        document.getElementById("confirm"),
+        document.querySelector('form#tos_form input[type="submit"]'),
+        document.querySelector('input[type="submit"][value="Saya mengerti"]'),
+        document.querySelector('input[type="submit"][value="I understand"]'),
+      ].filter(Boolean);
+      const btn = candidates[0];
+      if (!btn) return false;
+      btn.scrollIntoView({ block: "center" });
+      btn.click();
+      return true;
+    }).catch(() => false);
+    if (submittedFromDom) {
+      await page.waitForTimeout(800);
+      return true;
+    }
+    const formSubmitted = await page.evaluate(() => {
+      const form = document.getElementById("tos_form");
+      if (!form) return false;
+      form.submit();
+      return true;
+    }).catch(() => false);
+    if (formSubmitted) {
+      await page.waitForTimeout(800);
+      return true;
+    }
+  }
+
   const clickedSkip = await clickFirstActionable(page, SKIP_BUTTON_SELECTORS);
   if (clickedSkip) {
     await page.waitForTimeout(700);
@@ -559,6 +611,78 @@ async function clickFirstVisibleLocatorCenter(page, selectors) {
   return false;
 }
 
+async function handleCodeBuddyRegionPageViaApi(page, reportStep) {
+  if (!isProviderPage(page) || isGoogleAuthPage(page)) return false;
+
+  const result = await page.evaluate(async () => {
+    const bodyText = document.body?.innerText || "";
+    const looksLikeRegionPage = document.querySelector(".page-region")
+      || /select\s+region|region|country|area|get started|complete/i.test(bodyText);
+    if (!looksLikeRegionPage) return null;
+
+    try {
+      const response = await fetch("https://www.codebuddy.ai/console/login/account", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          accept: "application/json, text/plain, */*",
+          "content-type": "application/json",
+          "x-requested-with": "XMLHttpRequest",
+          "x-domain": window.location.hostname || "www.codebuddy.ai",
+        },
+        referrer: "https://www.codebuddy.ai/register/user/complete",
+        body: JSON.stringify({
+          attributes: {
+            countryCode: ["62"],
+            countryFullName: ["Indonesia"],
+            countryName: ["ID"],
+          },
+        }),
+      });
+
+      const text = await response.text().catch(() => "");
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = { raw: text };
+      }
+
+      if (response.ok && (!data || data.code === 0 || data.code === 200 || typeof data.code === "undefined")) {
+        return { action: "submitted_via_api" };
+      }
+
+      return {
+        action: "api_failed",
+        status: response.status,
+        code: data?.code,
+        message: data?.msg || data?.message || text || `HTTP ${response.status}`,
+      };
+    } catch (error) {
+      return {
+        action: "api_failed",
+        message: error?.message || "region submit request failed",
+      };
+    }
+  }).catch(() => null);
+
+  if (!result?.action) return false;
+
+  if (result.action === "submitted_via_api") {
+    reportStep("submitting_codebuddy_region", "Submitted CodeBuddy region via account API");
+    await page.waitForTimeout(1500);
+    return true;
+  }
+
+  reportStep(
+    "codebuddy_region_api_failed",
+    result.message
+      ? `CodeBuddy region API submit failed: ${result.message}`
+      : "CodeBuddy region API submit failed"
+  );
+  return false;
+}
+
 async function handleCodeBuddyRegionPageWithMouse(page, reportStep) {
   if (!isProviderPage(page) || isGoogleAuthPage(page)) return false;
 
@@ -629,6 +753,9 @@ async function handleCodeBuddyRegionPageWithMouse(page, reportStep) {
 
 async function handleCodeBuddyRegionPage(page, reportStep) {
   if (!isProviderPage(page) || isGoogleAuthPage(page)) return false;
+
+  const handledViaApi = await handleCodeBuddyRegionPageViaApi(page, reportStep);
+  if (handledViaApi) return true;
 
   const handledWithMouse = await handleCodeBuddyRegionPageWithMouse(page, reportStep);
   if (handledWithMouse) return true;
@@ -927,72 +1054,93 @@ async function handleProviderLoginGate(page, reportStep) {
 }
 
 export function createKiroCallbackMonitor(context, page, timeoutMs = DEFAULT_MANUAL_TIMEOUT_MS) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const trackedPages = new Set();
-    const cleanupFns = [];
-
-    const settle = (result, error = null) => {
-      if (settled) return;
-      settled = true;
-      for (const fn of cleanupFns) fn();
-      if (error) reject(error);
-      else resolve(result);
-    };
-
-    const registerPage = (trackedPage) => {
-      if (!trackedPage || trackedPages.has(trackedPage)) return;
-      trackedPages.add(trackedPage);
-
-      const onFrame = (frame) => {
-        const parsed = parseCallbackUrl(frame?.url?.() || "");
-        if (parsed) settle(parsed);
-      };
-
-      const onRequest = (request) => {
-        const parsed = parseCallbackUrl(request?.url?.() || "");
-        if (parsed) settle(parsed);
-      };
-
-      const onRequestFailed = (request) => {
-        const parsed = parseCallbackUrl(request?.url?.() || "");
-        if (parsed) settle(parsed);
-      };
-
-      const onLoadState = () => {
-        const parsed = parseCallbackUrl(trackedPage.url?.() || "");
-        if (parsed) settle(parsed);
-      };
-
-      trackedPage.on("framenavigated", onFrame);
-      trackedPage.on("request", onRequest);
-      trackedPage.on("requestfailed", onRequestFailed);
-      trackedPage.on("domcontentloaded", onLoadState);
-      trackedPage.on("load", onLoadState);
-
-      cleanupFns.push(() => {
-        trackedPage.off("framenavigated", onFrame);
-        trackedPage.off("request", onRequest);
-        trackedPage.off("requestfailed", onRequestFailed);
-        trackedPage.off("domcontentloaded", onLoadState);
-        trackedPage.off("load", onLoadState);
-      });
-
-      const current = parseCallbackUrl(trackedPage.url?.() || "");
-      if (current) settle(current);
-    };
-
-    const onPage = (newPage) => registerPage(newPage);
-    context.on("page", onPage);
-    cleanupFns.push(() => context.off("page", onPage));
-
-    registerPage(page);
-
-    const timeout = setTimeout(() => {
-      settle(null, new Error("Timed out waiting for Kiro callback"));
-    }, timeoutMs);
-    cleanupFns.push(() => clearTimeout(timeout));
+  let resolveOuter;
+  let rejectOuter;
+  const promise = new Promise((resolve, reject) => {
+    resolveOuter = resolve;
+    rejectOuter = reject;
   });
+
+  let settled = false;
+  const trackedPages = new Set();
+  const contextCleanups = new Map();
+  const timeoutHandle = setTimeout(() => {
+    settle(null, new Error("Timed out waiting for Kiro callback"));
+  }, timeoutMs);
+
+  function settle(result, error = null) {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timeoutHandle);
+    for (const fns of contextCleanups.values()) {
+      for (const fn of fns) {
+        try { fn(); } catch {}
+      }
+    }
+    contextCleanups.clear();
+    if (error) rejectOuter(error);
+    else resolveOuter(result);
+  }
+
+  function registerPage(trackedPage, ownerCleanups) {
+    if (!trackedPage || trackedPages.has(trackedPage)) return;
+    trackedPages.add(trackedPage);
+
+    const onFrame = (frame) => {
+      const parsed = parseCallbackUrl(frame?.url?.() || "");
+      if (parsed) settle(parsed);
+    };
+    const onRequest = (request) => {
+      const parsed = parseCallbackUrl(request?.url?.() || "");
+      if (parsed) settle(parsed);
+    };
+    const onRequestFailed = (request) => {
+      const parsed = parseCallbackUrl(request?.url?.() || "");
+      if (parsed) settle(parsed);
+    };
+    const onLoadState = () => {
+      const parsed = parseCallbackUrl(trackedPage.url?.() || "");
+      if (parsed) settle(parsed);
+    };
+
+    trackedPage.on("framenavigated", onFrame);
+    trackedPage.on("request", onRequest);
+    trackedPage.on("requestfailed", onRequestFailed);
+    trackedPage.on("domcontentloaded", onLoadState);
+    trackedPage.on("load", onLoadState);
+
+    ownerCleanups.push(() => {
+      trackedPage.off("framenavigated", onFrame);
+      trackedPage.off("request", onRequest);
+      trackedPage.off("requestfailed", onRequestFailed);
+      trackedPage.off("domcontentloaded", onLoadState);
+      trackedPage.off("load", onLoadState);
+    });
+
+    const current = parseCallbackUrl(trackedPage.url?.() || "");
+    if (current) settle(current);
+  }
+
+  function bind(ctx, pg) {
+    if (settled) return;
+    if (contextCleanups.has(ctx)) return;
+    const cleanups = [];
+    contextCleanups.set(ctx, cleanups);
+
+    const onPage = (newPage) => registerPage(newPage, cleanups);
+    ctx.on("page", onPage);
+    cleanups.push(() => ctx.off("page", onPage));
+
+    if (pg) registerPage(pg, cleanups);
+  }
+
+  bind(context, page);
+
+  promise.rebind = ({ context: newContext, page: newPage } = {}) => {
+    if (newContext) bind(newContext, newPage);
+  };
+
+  return promise;
 }
 
 export async function runGoogleAccountAutomation({
