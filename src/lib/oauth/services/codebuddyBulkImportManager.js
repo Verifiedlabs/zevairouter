@@ -632,7 +632,7 @@ async function completeCodeBuddyRegistration(page, onStep) {
         continue;
       }
 
-      // Nothing left to handle — page is stable
+      // Nothing left to handle - page is stable
       break;
     }
 
