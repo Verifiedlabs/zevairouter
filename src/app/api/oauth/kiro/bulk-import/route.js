@@ -19,7 +19,7 @@ export async function POST(request) {
     if (invalidLines.length > 0) {
       return NextResponse.json(
         {
-          error: "Invalid account format. Use one account per line: gmail@example.com|password",
+          error: "Invalid account format. Use one account per line: email@gmail.com:password or email@gmail.com|password",
           invalidLines,
         },
         { status: 400 }
@@ -30,6 +30,7 @@ export async function POST(request) {
     const job = await manager.startJob({
       accounts,
       concurrency: body?.concurrency,
+      engine: body?.engine,
       proxyPoolMode: body?.proxyPoolMode || "none",
       proxyPoolId: body?.proxyPoolId || null,
     });

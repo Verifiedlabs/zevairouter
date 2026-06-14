@@ -30,6 +30,7 @@ export async function POST(request) {
     const job = await manager.startJob({
       accounts,
       concurrency: body?.concurrency,
+      engine: body?.engine,
       proxyPoolMode: body?.proxyPoolMode || "none",
       proxyPoolId: body?.proxyPoolId || null,
     });
