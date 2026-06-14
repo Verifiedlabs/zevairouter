@@ -2,6 +2,12 @@
 
 Synced automation, CodeBuddy/Qoder, and auth/quota hardening from upstream (9router_wyx0 v0.4.81–v0.4.84). Runtime identifiers (`wyxrouter` bin, `~/.9router` data dir, upstream API hosts) are unchanged; user-facing surfaces are branded ZevaiRouter.
 
+## Bulk Import — Standalone Playwright Hotfix
+- Fixed bulk import failing in production (`npm run start`) with a misleading "Playwright not available. playwright installed but cannot be required" error even when Playwright and Chromium were installed correctly.
+- Root cause: the standalone server pulls in the `cli/hooks/*` runtime helpers through a dynamic `require()` that Next's file tracer can't follow, so `cli/hooks` was dropped from `.next/standalone`, and `launchChromium` threw on the helper's false-negative verdict *before* it ever tried `import("playwright")`.
+- `next.config.mjs` now force-includes `./cli/hooks/**/*` in `outputFileTracingIncludes`, and `bulkImportBrowserEngine.js` attempts `import("playwright")` first (the path that resolves inside the standalone bundle), only falling back to the runtime helper when the direct import genuinely fails.
+- Net effect: Chromium bulk import now works in both `npm run dev` and standalone `npm run start` with no manual Playwright juggling.
+
 ## Bulk Import — Browser Engine Selection
 - Bulk-import modal now offers a Browser Engine dropdown: **Chromium (default)** or **Camoufox (stealth Firefox)**. The engine choice propagates through the job to the launcher.
 - Both engine paths route through `bulkImportBrowserEngine.js`, which wraps the Playwright/Camoufox runtime helpers and converts install/missing-binary failures into actionable error strings.
