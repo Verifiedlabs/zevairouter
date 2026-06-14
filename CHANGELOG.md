@@ -1,3 +1,35 @@
+# v0.4.84 (2026-06-14)
+
+Synced automation, CodeBuddy/Qoder, and auth/quota hardening from upstream (9router_wyx0 v0.4.81–v0.4.84). Runtime identifiers (`wyxrouter` bin, `~/.9router` data dir, upstream API hosts) are unchanged; user-facing surfaces are branded ZevaiRouter.
+
+## Bulk Import — Browser Engine Selection
+- Bulk-import modal now offers a Browser Engine dropdown: **Chromium (default)** or **Camoufox (stealth Firefox)**. The engine choice propagates through the job to the launcher.
+- Both engine paths route through `bulkImportBrowserEngine.js`, which wraps the Playwright/Camoufox runtime helpers and converts install/missing-binary failures into actionable error strings.
+- Camoufox ships as an optional dependency (`camoufox-js`) and lazy-installs its Firefox binary into the user data dir on first use; Chromium remains the default and needs no extra install.
+
+## Bulk Import — Playwright & Google Workspace Hotfixes
+- Playwright Chromium auto-installs lazily on the first bulk-import attempt (`cli/hooks/playwrightRuntime.js`), fixing "Executable doesn't exist" right after a global install.
+- Google Workspace "Welcome to your new account" consent screens no longer stall bulk login; the worker prioritises the primary "I understand" action with DOM-level click fallbacks.
+
+## Qoder
+- Added Qoder bulk auto-login (Google SSO + device flow) with a new Automation panel and `/api/oauth/qoder/bulk-import` job routes (cancel + manual session).
+- Executor refuses pre-flight when the requested model is `enable: false` for the account, returning HTTP 403 (`model_not_enabled`) with a plan-tier hint instead of a generic upstream `code: 112` error.
+
+## CodeBuddy
+- Bulk automation continues from Google login through Access Key creation; a worker only succeeds once the generated Access Key is saved. Existing keys are reused; restricted pages attempt key creation instead of skipping.
+- Generated Access Keys are the primary chat credential; the OAuth token, web-session metadata, `uid`, and enterprise identity are retained for upstream quota lookups.
+- Added CLI spoofing headers (`X-App: cli`, `X-Stainless-*`) to the default executor for CodeBuddy.
+- When upstream quota auth is unavailable, Quota Tracker reports the limitation and directs users to ZevaiRouter Usage for locally observed request/token tracking.
+
+## Accounts — Auto-Disable on Terminal Auth Errors
+- Accounts that hit 3 consecutive terminal auth errors are automatically disabled (`isActive: false`), recording `autoDisabledAt`, `autoDisabledReason`, and `consecutiveAuthFailures`. The counter resets on a successful request and re-enabling clears the state; the provider connection row surfaces the reason.
+
+## Tests
+- Added CodeBuddy CLI-header, header-simple, and usage unit suites; expanded CodeBuddy bulk-import and Qoder (plan-gate) coverage.
+
+## Distribution
+- Bumped the root and CLI packages to `0.4.84`, added `camoufox-js` as an optional dependency, and aligned the CLI bin to `wyxrouter`.
+
 # v0.4.71 (2026-06-06)
 
 ## Features
