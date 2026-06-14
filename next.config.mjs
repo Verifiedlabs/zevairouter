@@ -27,7 +27,12 @@ const nextConfig = {
     // build (otherwise: "Cannot find module .../playwright-core/browsers.json").
     "*": [
       "./node_modules/playwright-core/**/*",
-      "./node_modules/playwright/**/*"
+      "./node_modules/playwright/**/*",
+      // bulkImportBrowserEngine.js loads these runtime helpers via a dynamic
+      // require(`../../../../cli/hooks/${name}`) the file tracer can't follow, so the
+      // standalone build omitted cli/hooks entirely and bulk import ran a stale
+      // "playwright installed but cannot be required" path. Force-include them.
+      "./cli/hooks/**/*"
     ]
   },
   images: {
