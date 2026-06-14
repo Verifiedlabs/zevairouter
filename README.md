@@ -72,7 +72,7 @@ The automation page uses **Playwright** to drive real browser sessions for provi
   - **Dev:** `npm run dev`
   - **Production / standalone:** `npm run start`
 
-> **Note:** Older standalone builds could crash with `Cannot find module .../playwright-core/browsers.json`. This is now fixed — the standalone build force-includes the Playwright packages (`next.config.mjs` → `serverExternalPackages` + `outputFileTracingIncludes`) and the start script links them into `.next/standalone/node_modules` (`scripts/start-standalone.mjs`).
+> **Note:** Older standalone builds could crash with `Cannot find module .../playwright-core/browsers.json`, or fail bulk import with a misleading `playwright installed but cannot be required` error even when Playwright was installed correctly. Both are now fixed — the standalone build force-includes the Playwright packages **and** the `cli/hooks` runtime helpers (`next.config.mjs` → `serverExternalPackages` + `outputFileTracingIncludes`), the start script links the Playwright packages into `.next/standalone/node_modules` (`scripts/start-standalone.mjs`), and the bulk-import launcher (`bulkImportBrowserEngine.js`) imports Playwright directly before falling back to the runtime helper.
 
 ## 🌐 Public Access / Hosting
 
