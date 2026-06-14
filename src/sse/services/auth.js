@@ -100,7 +100,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       const locked = isModelLockActive(c, model);
       if (excluded || locked) {
         const lockUntil = getEarliestModelLockUntil(c);
-        log.debug("AUTH", `  → ${c.id?.slice(0, 8)} | ${excluded ? "excluded" : ""} ${locked ? `modelLocked(${model}) until ${lockUntil}` : ""}`);
+        log.debug("AUTH", `  \u2192 ${c.id?.slice(0, 8)} | ${excluded ? "excluded" : ""} ${locked ? `modelLocked(${model}) until ${lockUntil}` : ""}`);
       }
     });
 
@@ -221,14 +221,14 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
 }
 
 /**
- * Mark account+model as unavailable — locks modelLock_${model} in DB.
+ * Mark account+model as unavailable \u2014 locks modelLock_${model} in DB.
  * All errors (429, 401, 5xx, etc.) lock per model, not per account.
  * @param {string} connectionId
  * @param {number} status - HTTP status code from upstream
  * @param {string} errorText
  * @param {string|null} provider
  * @param {string|null} model - The specific model that triggered the error
- * @returns {{ shouldFallback: boolean, cooldownMs: number }}
+ * @returns shouldFallback: boolean, cooldownMs: number
  */
 export async function markAccountUnavailable(connectionId, status, errorText, provider = null, model = null, resetsAtMs = null) {
   if (!connectionId || connectionId === "noauth") return { shouldFallback: false, cooldownMs: 0 };
@@ -268,7 +268,49 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   log.warn("AUTH", `${connName} locked ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]`);
 
   if (provider && status && reason) {
-    console.error(`❌ ${provider} [${status}]: ${reason}`);
+    console.error(`\u274c ${provider} [${status}]: ${reason}`);
+  }
+
+  // --- Auto-disable on terminal auth errors ---
+  // Terminal errors: token expired/invalid/revoked (401), banned/suspended (403)
+  // Only disable after consecutive failures to avoid false positives from transient issues
+  const TERMINAL_AUTH_STATUSES = new Set([401, 403]);
+  const TERMINAL_ERROR_MARKERS = [
+    "token expired", "token invalid", "invalid token", "revoked",
+    "unauthorized", "invalid api key", "invalid_api_key",
+    "banned", "suspended", "restricted", "account disabled",
+    "insufficient_quota", "quota exceeded", "payment required",
+  ];
+
+  if (TERMINAL_AUTH_STATUSES.has(status)) {
+    const lowerError = (typeof errorText === "string" ? errorText : "").toLowerCase();
+    const isTerminalError = TERMINAL_ERROR_MARKERS.some(marker => lowerError.includes(marker));
+
+    if (isTerminalError) {
+      const prevFailures = conn?.consecutiveAuthFailures || 0;
+      const newFailures = prevFailures + 1;
+
+      if (newFailures >= 3) {
+        // Auto-disable after 3 consecutive terminal auth errors
+        await updateProviderConnection(connectionId, {
+          isActive: false,
+          autoDisabledAt: new Date().toISOString(),
+          autoDisabledReason: lowerError.includes("banned") || lowerError.includes("suspended") || lowerError.includes("restricted")
+            ? "banned"
+            : lowerError.includes("quota") || lowerError.includes("payment")
+              ? "quota_exhausted"
+              : "token_expired",
+          consecutiveAuthFailures: newFailures,
+        });
+        log.warn("AUTH", `\u26d4 Auto-disabled ${connName} after ${newFailures} consecutive auth failures [${status}]: ${reason}`);
+      } else {
+        // Increment failure counter
+        await updateProviderConnection(connectionId, {
+          consecutiveAuthFailures: newFailures,
+        });
+        log.warn("AUTH", `${connName} auth failure ${newFailures}/3 [${status}]: ${reason}`);
+      }
+    }
   }
 
   return { shouldFallback: true, cooldownMs };
@@ -312,7 +354,7 @@ export async function clearAccountError(connectionId, currentConnection, model =
 
   // Only reset error state if no active locks remain
   if (remainingActiveLocks.length === 0) {
-    Object.assign(clearObj, { testStatus: "active", lastError: null, lastErrorAt: null, backoffLevel: 0 });
+    Object.assign(clearObj, { testStatus: "active", lastError: null, lastErrorAt: null, backoffLevel: 0, consecutiveAuthFailures: 0 });
   }
 
   await updateProviderConnection(connectionId, clearObj);

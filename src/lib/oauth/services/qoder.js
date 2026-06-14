@@ -175,6 +175,23 @@ export class QoderService {
     }
   }
 
+  async fetchUserPlan(accessToken) {
+    try {
+      const response = await fetchWithTimeout("https://qoder.com/api/v1/me/userplan", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+          "User-Agent": "Go-http-client/2.0",
+        },
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Convert the upstream's expiry hint into a Unix-millisecond timestamp.
    * Accepts:
@@ -197,7 +214,7 @@ export class QoderService {
     }
     const trimmed = typeof expiresAt === "string" ? expiresAt.trim() : "";
     if (trimmed) {
-      // Pure numeric string → ms-epoch (don't let Date.parse swallow short
+      // Pure numeric string \u2192 ms-epoch (don't let Date.parse swallow short
       // numerics as years).
       if (/^\d+$/.test(trimmed)) {
         const ms = Number.parseInt(trimmed, 10);

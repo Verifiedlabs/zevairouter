@@ -92,7 +92,7 @@ export async function getUsageForProvider(connection, proxyOptions = null) {
     case "kiro":
       return await getKiroUsage(accessToken, providerSpecificData, proxyOptions);
     case "codebuddy":
-      return await getCodeBuddyUsage(accessToken, providerSpecificData, proxyOptions);
+      return await getCodeBuddyUsage(accessToken, providerSpecificData, proxyOptions, apiKey);
     case "qoder":
       return await getQoderUsage(accessToken, proxyOptions);
     case "qwen":
@@ -141,9 +141,23 @@ async function fetchCodeBuddyUid(accessToken, providerSpecificData = {}, proxyOp
   }
 }
 
-async function getCodeBuddyUsage(accessToken, providerSpecificData = {}, proxyOptions = null) {
+async function getCodeBuddyUsage(accessToken, providerSpecificData = {}, proxyOptions = null, apiKey = null) {
   if (!accessToken) {
-    return { plan: "CodeBuddy", message: "CodeBuddy access token not available.", quotas: {} };
+    if (apiKey) {
+      return {
+        plan: "CodeBuddy",
+        message: "CodeBuddy chat key active. Upstream quota is unavailable without a valid IDE OAuth token; use ZevaiRouter Usage for local request and token tracking.",
+        quotas: {},
+        authMode: "generated-api-key",
+        trackingMode: "local-router",
+      };
+    }
+    return {
+      plan: "CodeBuddy",
+      message: "CodeBuddy upstream quota is unavailable because no valid IDE OAuth token is stored.",
+      quotas: {},
+      trackingMode: "unavailable",
+    };
   }
 
   try {
@@ -166,8 +180,10 @@ async function getCodeBuddyUsage(accessToken, providerSpecificData = {}, proxyOp
     if (response.status === 401 || response.status === 403) {
       return {
         plan: "CodeBuddy",
-        message: `CodeBuddy quota: auth failed (${response.status}). uid=${uid ? "yes" : "missing"}.`,
+        message: `CodeBuddy IDE OAuth token was rejected (${response.status}). Upstream quota is unavailable; use ZevaiRouter Usage for local request and token tracking.`,
         quotas: {},
+        authMode: "oauth-rejected",
+        trackingMode: "local-router",
       };
     }
 
@@ -179,7 +195,10 @@ async function getCodeBuddyUsage(accessToken, providerSpecificData = {}, proxyOp
       };
     }
 
-    return parseCodeBuddyUsage(payload);
+    return {
+      ...parseCodeBuddyUsage(payload),
+      authMode: "oauth",
+    };
   } catch (error) {
     return { plan: "CodeBuddy", message: `CodeBuddy connected. Unable to fetch quota: ${error.message}`, quotas: {} };
   }
@@ -484,7 +503,7 @@ function formatGitHubQuotaSnapshot(quota) {
 }
 
 /**
- * Gemini CLI Usage — fetch per-model quota via Cloud Code Assist API.
+ * Gemini CLI Usage \u2014 fetch per-model quota via Cloud Code Assist API.
  * Uses retrieveUserQuota (same endpoint as `gemini /stats`) returning
  * per-model buckets with remainingFraction + resetTime.
  */
@@ -609,7 +628,7 @@ async function getGeminiSubscriptionInfo(accessToken, proxyOptions = null) {
  */
 async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptions = null) {
   try {
-    // Fetch subscription info once — reuse for both projectId and plan
+    // Fetch subscription info once \u2014 reuse for both projectId and plan
     const subscriptionInfo = await getAntigravitySubscriptionInfo(accessToken, proxyOptions);
     const projectId = subscriptionInfo?.cloudaicompanionProject || null;
 
@@ -1171,7 +1190,7 @@ async function getIflowUsage(accessToken) {
 /**
  * Ollama Cloud Usage
  * Ollama Cloud uses an API key from ollama.com/settings/keys
- * and has no public usage API — free tier has light usage limits (resets every 5h & 7d).
+ * and has no public usage API \u2014 free tier has light usage limits (resets every 5h & 7d).
  * This returns an informational message with the plan details.
  */
 async function getOllamaUsage(accessToken, providerSpecificData) {
@@ -1248,7 +1267,7 @@ async function getGlmUsage(apiKey, provider, proxyOptions = null) {
   }
 }
 
-// ── MiniMax helpers ──────────────────────────────────────────────────────
+// \u2500\u2500 MiniMax helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function getMiniMaxField(model, snakeKey, camelKey) {
   if (!model || typeof model !== "object") return null;
   return model[snakeKey] ?? model[camelKey] ?? null;
@@ -1348,7 +1367,7 @@ function addMiniMaxQuota(quotas, key, model, getTotal, countSnake, countCamel, p
     // M-series bucket: API only ships *_remaining_percent (count = 0). Normalize
     // to total=100. The downstream buildMiniMaxQuota treats the count as
     // "used" or "remaining" depending on countMeansRemaining, so the synthetic
-    // count has to match that semantic — otherwise the UI flips the percentage.
+    // count has to match that semantic \u2014 otherwise the UI flips the percentage.
     effectiveTotal = 100;
     const pct = providedPercent;
     effectiveCount = countMeansRemaining
