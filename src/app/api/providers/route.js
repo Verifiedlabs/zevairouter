@@ -122,9 +122,11 @@ export async function POST(request) {
 
     let providerSpecificData = normalizeProviderSpecificData(provider, body, body.providerSpecificData);
 
-    // Compatible/embedding nodes allow exactly one connection each. These guards were
-    // dropped accidentally during the bun:sqlite refactor (v0.4.28); restored to honor
-    // the contract locked in by tests/unit/compatible-provider-connections.test.js (#925).
+    // Compatible/embedding nodes inherit their routing config (prefix/baseUrl) from the node.
+    // OpenAI Compatible and Custom Embedding nodes still allow exactly one connection each
+    // (contract locked in by tests/unit/compatible-provider-connections.test.js #925).
+    // Anthropic Compatible nodes now allow MULTIPLE connections (many API keys) so they can
+    // be load-balanced / rotated like first-party providers (Single + Bulk Add).
     if (isOpenAICompatibleProvider(provider)) {
       const node = await getProviderNodeById(provider);
       if (!node) {
@@ -145,10 +147,7 @@ export async function POST(request) {
       if (!node) {
         return NextResponse.json({ error: "Anthropic Compatible node not found" }, { status: 404 });
       }
-      const existingConnections = await getProviderConnections({ provider });
-      if (existingConnections.length > 0) {
-        return NextResponse.json({ error: "Only one connection is allowed for this Anthropic Compatible node" }, { status: 400 });
-      }
+      // NOTE: no single-connection guard here on purpose — multiple keys are allowed.
       providerSpecificData = {
         prefix: node.prefix,
         baseUrl: node.baseUrl,
