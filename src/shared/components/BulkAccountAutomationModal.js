@@ -73,6 +73,7 @@ export default function BulkAccountAutomationModal({
   const completedRefreshJobsRef = useRef(new Set());
   const [bulkText, setBulkText] = useState("");
   const [concurrency, setConcurrency] = useState(String(DEFAULT_CONCURRENCY));
+  const [autoConcurrency, setAutoConcurrency] = useState(false);
   const [engine, setEngine] = useState(DEFAULT_ENGINE);
   const [proxyPoolSelection, setProxyPoolSelection] = useState("");
   const [proxyPools, setProxyPools] = useState([]);
@@ -119,6 +120,7 @@ export default function BulkAccountAutomationModal({
   const resetState = useCallback(() => {
     setBulkText("");
     setConcurrency(String(DEFAULT_CONCURRENCY));
+    setAutoConcurrency(false);
     setEngine(DEFAULT_ENGINE);
     setProxyPoolSelection("");
     setActiveJob(null);
@@ -224,7 +226,9 @@ export default function BulkAccountAutomationModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accounts: lines,
-          concurrency: Number.parseInt(concurrency, 10) || DEFAULT_CONCURRENCY,
+          concurrency: autoConcurrency
+            ? "auto"
+            : Number.parseInt(concurrency, 10) || DEFAULT_CONCURRENCY,
           engine,
           proxyPoolMode,
           proxyPoolId,
@@ -319,17 +323,31 @@ export default function BulkAccountAutomationModal({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium">Concurrent Workers</label>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <label className="block text-sm font-medium">Concurrent Workers</label>
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-text-muted">
+                    <input
+                      type="checkbox"
+                      checked={autoConcurrency}
+                      onChange={(event) => setAutoConcurrency(event.target.checked)}
+                      className="size-3.5 rounded border-black/20 dark:border-white/20"
+                    />
+                    Auto-detect
+                  </label>
+                </div>
                 <Input
                   type="number"
                   min="1"
                   max="8"
-                  value={concurrency}
+                  value={autoConcurrency ? "" : concurrency}
                   onChange={(event) => setConcurrency(event.target.value)}
-                  placeholder="4"
+                  placeholder={autoConcurrency ? "Auto" : "4"}
+                  disabled={autoConcurrency}
                 />
                 <p className="mt-1 text-xs text-text-muted">
-                  Default 4. Allowed range: 1 to 8 workers.
+                  {autoConcurrency
+                    ? "Workers auto-detected from server CPU/RAM, clamped to 1 to 8."
+                    : "Default 4. Allowed range: 1 to 8 workers."}
                 </p>
               </div>
 
