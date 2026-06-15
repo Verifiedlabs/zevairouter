@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomUUID, createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR } from "../../dataDir.js";
@@ -55,6 +55,92 @@ function writeJsonFile(filePath, payload) {
   const tempFile = `${filePath}.${process.pid}.tmp`;
   fs.writeFileSync(tempFile, JSON.stringify(payload, null, 2), "utf8");
   fs.renameSync(tempFile, filePath);
+}
+
+// --- Encrypted resume vault -------------------------------------------------
+// Job snapshots are sanitized and deliberately omit credentials, so they
+// cannot be used to continue a job after a restart. The resume vault stores
+// the minimum sensitive data (credentials + proxy/engine config) encrypted at
+// rest so an interrupted job can be rebuilt and continued automatically.
+
+function getResumeFile(jobId, dir = KIRO_BULK_IMPORT_DIR) {
+  ensurePersistenceDir(dir);
+  return path.join(dir, `${jobId}.resume.enc`);
+}
+
+function loadResumeSecret() {
+  if (process.env.BULK_IMPORT_RESUME_SECRET) return process.env.BULK_IMPORT_RESUME_SECRET;
+  const file = path.join(DATA_DIR, "bulk-import-resume-key");
+  try {
+    return fs.readFileSync(file, "utf8").trim();
+  } catch {}
+  try {
+    ensurePersistenceDir(DATA_DIR);
+    const generated = randomBytes(32).toString("hex");
+    fs.writeFileSync(file, generated, { mode: 0o600 });
+    return generated;
+  } catch {
+    // Fall back to an ephemeral key. Resume will only work within this process
+    // lifetime, but encryption of the at-rest blob is still enforced.
+    return randomBytes(32).toString("hex");
+  }
+}
+
+function getResumeKey() {
+  return createHash("sha256").update(String(loadResumeSecret())).digest();
+}
+
+function encryptResumePayload(payload) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", getResumeKey(), iv);
+  const json = Buffer.from(JSON.stringify(payload), "utf8");
+  const ciphertext = Buffer.concat([cipher.update(json), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return {
+    v: 1,
+    alg: "aes-256-gcm",
+    iv: iv.toString("base64"),
+    tag: authTag.toString("base64"),
+    data: ciphertext.toString("base64"),
+  };
+}
+
+function decryptResumePayload(envelope) {
+  if (!envelope || envelope.alg !== "aes-256-gcm" || !envelope.iv || !envelope.tag || !envelope.data) {
+    return null;
+  }
+  try {
+    const decipher = createDecipheriv("aes-256-gcm", getResumeKey(), Buffer.from(envelope.iv, "base64"));
+    decipher.setAuthTag(Buffer.from(envelope.tag, "base64"));
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(envelope.data, "base64")),
+      decipher.final(),
+    ]);
+    return JSON.parse(plaintext.toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeResumeBlob(filePath, payload) {
+  try {
+    ensurePersistenceDir(path.dirname(filePath));
+    const tempFile = `${filePath}.${process.pid}.tmp`;
+    fs.writeFileSync(tempFile, JSON.stringify(encryptResumePayload(payload)), { mode: 0o600 });
+    fs.renameSync(tempFile, filePath);
+  } catch {}
+}
+
+function readResumeBlob(filePath) {
+  const envelope = readJsonFile(filePath);
+  if (!envelope) return null;
+  return decryptResumePayload(envelope);
+}
+
+function deleteResumeBlob(filePath) {
+  try {
+    if (fs.existsSync(filePath)) fs.rmSync(filePath);
+  } catch {}
 }
 
 function readPersistedLatestJobId(metaFile = KIRO_BULK_IMPORT_META_FILE) {
@@ -426,6 +512,149 @@ export class KiroBulkImportManager {
     this.latestJobId = readPersistedLatestJobId(this.metaFile);
   }
 
+  // Persist the encrypted resume vault for a job. Written once at start time;
+  // credentials are static for the lifetime of a job.
+  persistResumeBlob(job) {
+    try {
+      writeResumeBlob(getResumeFile(job.jobId, this.storageDir), {
+        jobId: job.jobId,
+        concurrency: job.concurrency,
+        engine: job.engine,
+        proxyPoolMode: job.proxyPoolMode,
+        proxyUrls: job.proxyUrls || [],
+        createdAt: job.createdAt,
+        accounts: job.accounts.map((account) => ({
+          line: account.line,
+          email: account.email,
+          password: account.password,
+        })),
+      });
+    } catch {}
+  }
+
+  // If a persisted job is active but missing from memory (e.g. after a server
+  // restart), rebuild it and continue automatically. Returns true if a live
+  // job was (re)created in memory. Synchronous up to this.jobs.set so two
+  // concurrent polls cannot double-hydrate.
+  hydrateInterruptedJob(jobId) {
+    if (!jobId) return false;
+    if (this.jobs.has(jobId)) return false;
+
+    const snapshot = readJsonFile(getJobFile(jobId, this.storageDir));
+    if (!snapshot) return false;
+    if (!ACTIVE_JOB_STATUSES.has(snapshot.status)) return false;
+
+    const resume = readResumeBlob(getResumeFile(jobId, this.storageDir));
+
+    // No saved credentials -> cannot auto-resume. Mark interrupted so the job
+    // stops hanging at "waiting for worker" forever.
+    if (!resume || !Array.isArray(resume.accounts) || resume.accounts.length === 0) {
+      this.markJobInterrupted(jobId, snapshot);
+      return false;
+    }
+
+    const passwordByLine = new Map(resume.accounts.map((entry) => [entry.line, entry.password]));
+    const emailByLine = new Map(resume.accounts.map((entry) => [entry.line, entry.email]));
+    const createdAt = snapshot.createdAt || resume.createdAt || nowIso();
+
+    const accounts = (snapshot.accounts || []).map((account) => {
+      const isTerminal = TERMINAL_ACCOUNT_STATUSES.has(account.status);
+      const logs = Array.isArray(account.logs) ? [...account.logs] : [];
+      const rebuilt = {
+        line: account.line,
+        email: account.email || emailByLine.get(account.line) || "",
+        password: isTerminal ? undefined : (passwordByLine.get(account.line) ?? null),
+        proxyUrl: null,
+        status: account.status,
+        error: account.error || null,
+        connectionId: account.connectionId || null,
+        workerId: isTerminal ? (account.workerId || null) : null,
+        manualSession: null,
+        runtimeSession: null,
+        currentStep: account.currentStep || null,
+        updatedAt: account.updatedAt || createdAt,
+        logs,
+      };
+      if (!isTerminal) {
+        rebuilt.status = "queued";
+        rebuilt.currentStep = "queued";
+        rebuilt.error = null;
+        rebuilt.logs.push(createLogEntry("resumed", "Re-queued after a server restart to continue automatically"));
+      }
+      return rebuilt;
+    });
+
+    const job = {
+      jobId,
+      status: "running",
+      concurrency: clampConcurrency(resume.concurrency),
+      engine: resume.engine || "chromium",
+      proxyPoolMode: resume.proxyPoolMode || "none",
+      proxyUrls: Array.isArray(resume.proxyUrls) ? resume.proxyUrls : [],
+      createdAt,
+      startedAt: snapshot.startedAt || createdAt,
+      finishedAt: null,
+      error: null,
+      cancelRequested: false,
+      browser: null,
+      nextIndex: 0,
+      manualFollowups: new Set(),
+      persistPromise: Promise.resolve(),
+      lastPreview: snapshot.preview || null,
+      lastPreviewCapturedAt: 0,
+      accounts,
+    };
+
+    this.jobs.set(jobId, job);
+    if (!this.latestJobId) this.latestJobId = jobId;
+
+    const hasQueued = accounts.some((account) => account.status === "queued");
+    if (!hasQueued) {
+      // Nothing left to do; finalize cleanly.
+      job.status = "completed";
+      job.finishedAt = nowIso();
+      void this.persistJobSnapshot(job, { forcePreview: false });
+      deleteResumeBlob(getResumeFile(jobId, this.storageDir));
+      return true;
+    }
+
+    void this.runJob(jobId);
+    return true;
+  }
+
+  // Mark an interrupted job (with no recoverable credentials) as failed so the
+  // UI shows a clear terminal state instead of hanging.
+  markJobInterrupted(jobId, snapshot) {
+    const message = "Job was interrupted by a server restart and could not be auto-resumed (saved credentials were unavailable). Please start a new bulk login.";
+    const accounts = (snapshot.accounts || []).map((account) => {
+      if (TERMINAL_ACCOUNT_STATUSES.has(account.status)) return account;
+      const logs = Array.isArray(account.logs) ? [...account.logs] : [];
+      logs.push(createLogEntry("failed", message, "error"));
+      return {
+        ...account,
+        status: "failed",
+        error: message,
+        currentStep: "failed",
+        updatedAt: nowIso(),
+        manualSessionAvailable: false,
+        logs,
+      };
+    });
+    const updatedSnapshot = {
+      ...snapshot,
+      status: "failed",
+      error: snapshot.error || message,
+      finishedAt: snapshot.finishedAt || nowIso(),
+      accounts,
+      summary: buildSummary(accounts),
+      activity: buildJobActivity(accounts),
+    };
+    try {
+      writeJsonFile(getJobFile(jobId, this.storageDir), updatedSnapshot);
+    } catch {}
+    deleteResumeBlob(getResumeFile(jobId, this.storageDir));
+  }
+
   async startJob({ accounts, concurrency, engine, proxyPoolMode, proxyPoolId }) {
     const { parsed, invalidLines } = parseKiroBulkAccounts(accounts);
     if (!parsed.length) {
@@ -497,17 +726,20 @@ export class KiroBulkImportManager {
     this.latestJobId = jobId;
     writePersistedLatestJobId(jobId, this.metaFile);
     await this.persistJobSnapshot(job, { forcePreview: false });
+    this.persistResumeBlob(job);
     void this.runJob(jobId);
     return sanitizeJob(job);
   }
 
   getJob(jobId) {
+    this.hydrateInterruptedJob(jobId);
     const job = this.jobs.get(jobId);
     if (job) return sanitizeJob(job, { preview: job.lastPreview || null });
     return readJsonFile(getJobFile(jobId, this.storageDir));
   }
 
   async getJobWithPreview(jobId) {
+    this.hydrateInterruptedJob(jobId);
     const job = this.jobs.get(jobId);
     if (!job) return readJsonFile(getJobFile(jobId, this.storageDir));
     const preview = await this.capturePreview(job);
@@ -905,6 +1137,9 @@ export class KiroBulkImportManager {
       }
       job.finishedAt = nowIso();
       await this.persistJobSnapshot(job, { forcePreview: true });
+      // Job has reached a terminal state; the encrypted resume vault is no
+      // longer needed.
+      deleteResumeBlob(getResumeFile(job.jobId, this.storageDir));
     }
   }
 }
