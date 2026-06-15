@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR } from "../../dataDir.js";
 import { getProxyPoolById, getProxyPools } from "../../../models/index.js";
+import { getOptimalWorkerCount, isAutoConcurrencyValue } from "../../systemSpecs.js";
 import { KiroService } from "./kiro.js";
 import { createKiroCallbackMonitor, runKiroGoogleAutomation } from "./kiroGoogleAutomation.js";
 
@@ -68,6 +69,10 @@ function writePersistedLatestJobId(jobId, metaFile = KIRO_BULK_IMPORT_META_FILE)
 }
 
 function clampConcurrency(value) {
+  if (isAutoConcurrencyValue(value)) {
+    const optimal = getOptimalWorkerCount();
+    return Math.min(KIRO_BULK_IMPORT_MAX_CONCURRENCY, Math.max(KIRO_BULK_IMPORT_MIN_CONCURRENCY, optimal));
+  }
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return KIRO_BULK_IMPORT_DEFAULT_CONCURRENCY;
   return Math.min(KIRO_BULK_IMPORT_MAX_CONCURRENCY, Math.max(KIRO_BULK_IMPORT_MIN_CONCURRENCY, parsed));
@@ -88,7 +93,7 @@ export function parseKiroBulkAccounts(accounts = []) {
     let password = "";
 
     if (raw.includes("|")) {
-      // Pipe separator (original behavior) — password may contain |
+      // Pipe separator (original behavior) \u2014 password may contain |
       const [emailPart = "", ...passwordParts] = raw.split("|");
       email = emailPart.trim();
       password = passwordParts.join("|").trim();
@@ -98,7 +103,7 @@ export function parseKiroBulkAccounts(accounts = []) {
       email = raw.substring(0, tabIdx).trim();
       password = raw.substring(tabIdx + 1).trim();
     } else if (raw.includes(":")) {
-      // Colon separator — only if part before first : looks like email
+      // Colon separator \u2014 only if part before first : looks like email
       const colonIdx = raw.indexOf(":");
       const beforeColon = raw.substring(0, colonIdx).trim();
       if (beforeColon.includes("@")) {
