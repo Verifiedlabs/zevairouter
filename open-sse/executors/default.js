@@ -162,7 +162,7 @@ export class DefaultExecutor extends BaseExecutor {
 
   transformRequest(model, body) {
     const transformed = this.applyJsonSchemaFallback(body);
-    if (this.provider === "codebuddy") {
+    if (this.provider?.startsWith?.("codebuddy")) {
       const maxTokens = Number(transformed.max_tokens);
       const maxCompletionTokens = Number(transformed.max_completion_tokens);
       return buildCodeBuddyBody(model, transformed, maxTokens, maxCompletionTokens);
@@ -172,7 +172,7 @@ export class DefaultExecutor extends BaseExecutor {
 
   prepareRequestBody(transformedBody, headers) {
     const bodyStr = JSON.stringify(transformedBody);
-    if (this.provider !== "codebuddy") return bodyStr;
+    if (!this.provider?.startsWith?.("codebuddy")) return bodyStr;
     headers["Content-Encoding"] = "gzip";
     return gzipSync(bodyStr);
   }
@@ -295,10 +295,14 @@ export class DefaultExecutor extends BaseExecutor {
         } else if (this.provider === "gitlab") {
           // GitLab Duo uses Bearer token (PAT with ai_features scope, or OAuth access token)
           headers["Authorization"] = `Bearer ${credentials.apiKey || credentials.accessToken}`;
-        } else if (this.provider === "codebuddy") {
+        } else if (this.provider?.startsWith?.("codebuddy")) {
           const requestId = codeBuddyRequestId();
           const conversationId = codeBuddyRequestId();
-          headers["Authorization"] = `Bearer ${credentials.apiKey || credentials.accessToken}`;
+          if (credentials.apiKey) {
+            headers["X-Api-Key"] = credentials.apiKey;
+          } else {
+            headers["Authorization"] = `Bearer ${credentials.accessToken}`;
+          }
           headers["Accept"] = "text/event-stream";
           headers["Content-Type"] = "application/json; charset=utf-8";
           headers["User-Agent"] = "CLI/2.105.2 CodeBuddy/2.105.2";
@@ -309,7 +313,7 @@ export class DefaultExecutor extends BaseExecutor {
           headers["X-Stainless-Helper-Method"] = "stream";
           headers["X-Stainless-Retry-Count"] = "0";
           headers["X-Requested-With"] = "XMLHttpRequest";
-          headers["X-Domain"] = credentials.providerSpecificData?.domain || "www.codebuddy.ai";
+          headers["X-Domain"] = credentials.providerSpecificData?.domain || this.config?.domain || "www.codebuddy.ai";
           headers["X-Request-ID"] = requestId;
           headers["X-Conversation-ID"] = conversationId;
           headers["X-Conversation-Request-ID"] = conversationId;
@@ -452,14 +456,16 @@ export class DefaultExecutor extends BaseExecutor {
   }
 
   async refreshCodeBuddy(refreshToken, proxyOptions = null) {
-    const response = await proxyAwareFetch(PROVIDERS.codebuddy.refreshUrl, {
+    const refreshUrl = this.config?.refreshUrl || PROVIDERS.codebuddy.refreshUrl;
+    const refreshDomain = this.config?.domain || "www.codebuddy.ai";
+    const response = await proxyAwareFetch(refreshUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
         "User-Agent": "CLI/2.63.2 CodeBuddy/2.63.2",
         "X-Requested-With": "XMLHttpRequest",
-        "X-Domain": "www.codebuddy.ai",
+        "X-Domain": refreshDomain,
         "X-Refresh-Token": refreshToken,
         "X-Auth-Refresh-Source": "plugin",
         "X-Product": "SaaS",

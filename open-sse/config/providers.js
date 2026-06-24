@@ -360,6 +360,14 @@ export const PROVIDERS = {
     baseUrl: "https://www.codebuddy.ai/v2/chat/completions",
     format: "openai",
     refreshUrl: "https://www.codebuddy.ai/v2/plugin/auth/token/refresh",
+    domain: "www.codebuddy.ai",
+  },
+  // CodeBuddy CN (Tencent Cloud Code Assistant - China edition)
+  "codebuddy-cn": {
+    baseUrl: "https://www.codebuddy.cn/v2/chat/completions",
+    format: "openai",
+    refreshUrl: "https://www.codebuddy.cn/v2/plugin/auth/token/refresh",
+    domain: "www.codebuddy.cn",
   },
   opencode: {
     baseUrl: "https://opencode.ai",

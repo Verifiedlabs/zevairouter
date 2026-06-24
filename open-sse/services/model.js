@@ -17,7 +17,9 @@ const ALIAS_TO_PROVIDER_ID = {
   qd: "qoder",
   qoder: "qoder",
   cb: "codebuddy",
+  "cb-cn": "codebuddy-cn",
   codebuddy: "codebuddy",
+  "codebuddy-cn": "codebuddy-cn",
   // TTS providers
   el: "elevenlabs",
   // API Key providers

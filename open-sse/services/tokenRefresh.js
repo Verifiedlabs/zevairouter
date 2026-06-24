@@ -277,18 +277,21 @@ export async function refreshQwenToken(refreshToken, log) {
   }, log);
 }
 
-export async function refreshCodeBuddyToken(refreshToken, log) {
+export async function refreshCodeBuddyToken(refreshToken, log, provider = "codebuddy") {
   if (!refreshToken) return null;
-  return dedupRefresh("codebuddy", refreshToken, async () => {
+  return dedupRefresh(provider, refreshToken, async () => {
     try {
-      const response = await proxyAwareFetch(PROVIDERS.codebuddy.refreshUrl, {
+      const providerConfig = PROVIDERS[provider] || PROVIDERS.codebuddy;
+      const refreshUrl = providerConfig.refreshUrl;
+      const refreshDomain = providerConfig.domain || "www.codebuddy.ai";
+      const response = await proxyAwareFetch(refreshUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
           "User-Agent": "CLI/2.63.2 CodeBuddy/2.63.2",
           "X-Requested-With": "XMLHttpRequest",
-          "X-Domain": "www.codebuddy.ai",
+          "X-Domain": refreshDomain,
           "X-Refresh-Token": refreshToken,
           "X-Auth-Refresh-Source": "plugin",
           "X-Product": "SaaS",
@@ -297,7 +300,7 @@ export async function refreshCodeBuddyToken(refreshToken, log) {
       });
 
       if (!response.ok) {
-        log?.error?.("TOKEN_REFRESH", "Failed to refresh token for codebuddy", {
+        log?.error?.("TOKEN_REFRESH", `Failed to refresh token for ${provider}`, {
           status: response.status,
           error: await response.text().catch(() => ""),
         });
@@ -315,7 +318,7 @@ export async function refreshCodeBuddyToken(refreshToken, log) {
         expiresIn: data?.expiresIn || data?.expires_in || 86400,
       };
     } catch (error) {
-      log?.error?.("TOKEN_REFRESH", "Error refreshing token for codebuddy", {
+      log?.error?.("TOKEN_REFRESH", `Error refreshing token for ${provider}`, {
         error: error.message,
       });
       return null;
@@ -683,7 +686,10 @@ async function _getAccessTokenInternal(provider, credentials, log) {
       return await refreshQwenToken(credentials.refreshToken, log);
 
     case "codebuddy":
-      return await refreshCodeBuddyToken(credentials.refreshToken, log);
+      return await refreshCodeBuddyToken(credentials.refreshToken, log, "codebuddy");
+
+    case "codebuddy-cn":
+      return await refreshCodeBuddyToken(credentials.refreshToken, log, "codebuddy-cn");
 
     case "iflow":
       return await refreshIflowToken(credentials.refreshToken, log);
@@ -736,7 +742,9 @@ export async function refreshTokenByProvider(provider, credentials, log) {
     case "qwen":
       return refreshQwenToken(credentials.refreshToken, log);
     case "codebuddy":
-      return refreshCodeBuddyToken(credentials.refreshToken, log);
+      return refreshCodeBuddyToken(credentials.refreshToken, log, "codebuddy");
+    case "codebuddy-cn":
+      return refreshCodeBuddyToken(credentials.refreshToken, log, "codebuddy-cn");
     case "iflow":
       return refreshIflowToken(credentials.refreshToken, log);
     case "github":
