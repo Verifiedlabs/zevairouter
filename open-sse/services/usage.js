@@ -93,6 +93,8 @@ export async function getUsageForProvider(connection, proxyOptions = null) {
       return await getKiroUsage(accessToken, providerSpecificData, proxyOptions);
     case "codebuddy":
       return await getCodeBuddyUsage(accessToken, providerSpecificData, proxyOptions, apiKey);
+    case "codebuddy-cn":
+      return { message: "Usage API not implemented for codebuddy-cn (China edition uses different billing schema)" };
     case "qoder":
       return await getQoderUsage(accessToken, proxyOptions);
     case "qwen":

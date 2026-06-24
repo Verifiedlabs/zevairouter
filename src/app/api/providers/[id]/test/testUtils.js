@@ -18,6 +18,7 @@ import {
   CLINE_CONFIG,
   KILOCODE_CONFIG,
   CODEBUDDY_CONFIG,
+  CODEBUDDY_CN_CONFIG,
 } from "@/lib/oauth/constants/oauth";
 import { buildClineHeaders } from "@/shared/utils/clineAuth";
 
@@ -93,6 +94,7 @@ const OAUTH_TEST_CONFIG = {
     authPrefix: "Bearer ",
   },
   codebuddy: { tokenExists: true },
+  "codebuddy-cn": { tokenExists: true },
 };
 
 async function probeClineAccessToken(accessToken) {
@@ -212,15 +214,16 @@ async function refreshOAuthToken(connection) {
       };
     }
 
-    if (provider === "codebuddy") {
-      const response = await fetch(CODEBUDDY_CONFIG.refreshUrl, {
+    if (provider === "codebuddy" || provider === "codebuddy-cn") {
+      const codeBuddyConfig = provider === "codebuddy-cn" ? CODEBUDDY_CN_CONFIG : CODEBUDDY_CONFIG;
+      const response = await fetch(codeBuddyConfig.refreshUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "User-Agent": CODEBUDDY_CONFIG.userAgent,
+          "User-Agent": codeBuddyConfig.userAgent,
           "X-Requested-With": "XMLHttpRequest",
-          "X-Domain": CODEBUDDY_CONFIG.domain,
+          "X-Domain": codeBuddyConfig.domain,
           "X-Refresh-Token": refreshToken,
           "X-Auth-Refresh-Source": "plugin",
           "X-Product": "SaaS",
@@ -641,6 +644,30 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
           headers: { Authorization: `Bearer ${connection.apiKey}` },
         }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
+      }
+      case "codebuddy":
+      case "codebuddy-cn": {
+        const codeBuddyConfig = connection.provider === "codebuddy-cn" ? CODEBUDDY_CN_CONFIG : CODEBUDDY_CONFIG;
+        const baseUrl = codeBuddyConfig.baseUrl;
+        const res = await fetchWithConnectionProxy(`${baseUrl}/v2/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "User-Agent": codeBuddyConfig.userAgent,
+            "X-Domain": codeBuddyConfig.domain,
+            "X-Requested-With": "XMLHttpRequest",
+            "X-Product": "SaaS",
+            "X-Api-Key": connection.apiKey,
+          },
+          body: JSON.stringify({
+            model: "default-model-lite",
+            max_tokens: 1,
+            messages: [{ role: "user", content: "hi" }],
+          }),
+        }, effectiveProxy);
+        const valid = res.ok || res.status === 429 || res.status === 400;
+        return { valid, error: valid ? null : `Invalid API key (${res.status})` };
       }
       default:
         return { valid: false, error: "Provider test not supported" };
