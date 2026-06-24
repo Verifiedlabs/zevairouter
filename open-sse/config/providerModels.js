@@ -178,11 +178,19 @@ export const PROVIDER_MODELS = {
     { id: "gemini-3.1-flash-lite", name: "Gemini-3.1-flash-lite", maxInputTokens: 200000, maxOutputTokens: 65536 },
     { id: "gemini-2.5-pro", name: "Gemini-2.5-Pro", maxInputTokens: 400000, maxOutputTokens: 64000 },
     { id: "deepseek-v3-0324", name: "DeepSeek-V3", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
+    { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
+    { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
     { id: "glm-5.0", name: "GLM-5.0", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
     { id: "glm-5v-turbo", name: "GLM-5V-Turbo", maxInputTokens: 200000, maxOutputTokens: 38000 },
     { id: "glm-4.6", name: "GLM-4.6", maxInputTokens: 168000, maxOutputTokens: 32000, strip: ["image", "audio"] },
     { id: "kimi-k2.6", name: "Kimi-K2.6", maxInputTokens: 256000, maxOutputTokens: 32000 },
     { id: "kimi-k2.5", name: "Kimi-K2.5", maxInputTokens: 164000, maxOutputTokens: 32000 },
+  ],
+  "cb-cn": [  // CodeBuddy CN - verified available on copilot.tencent.com (2026-06-24)
+    { id: "default-model-lite", name: "Default-Lite", maxInputTokens: 176000, maxOutputTokens: 24000 },
+    { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
+    { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
+    { id: "glm-5.0", name: "GLM-5.0", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
   ],
   cu: [  // Cursor IDE
     { id: "default", name: "Auto (Server Picks)" },
@@ -922,6 +930,7 @@ const OAUTH_ALIASES = {
   opencode: "oc",
   qoder: "qd",
   codebuddy: "cb",
+  "codebuddy-cn": "cb-cn",
   vertex: "vertex",
   "vertex-partner": "vertex-partner",
 };
