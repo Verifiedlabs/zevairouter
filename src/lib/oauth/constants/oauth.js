@@ -260,6 +260,25 @@ export const CODEBUDDY_CONFIG = {
   pollInterval: 5000,
 };
 
+// CodeBuddy CN (Tencent Cloud Code Assistant - China edition) OAuth Configuration
+// Same browser-polling device-code flow as global edition, served from www.codebuddy.cn.
+// Login uses Tencent unified identity / WeChat (not Google), so bulk-import automation
+// that relies on Google login does NOT apply to this provider.
+// References:
+// - https://www.codebuddy.cn/docs/cli/iam (China edition)
+export const CODEBUDDY_CN_CONFIG = {
+  baseUrl: "https://www.codebuddy.cn",
+  stateUrl: "https://www.codebuddy.cn/v2/plugin/auth/state",
+  tokenUrl: "https://www.codebuddy.cn/v2/plugin/auth/token",
+  accountUrl: "https://www.codebuddy.cn/v2/plugin/login/account",
+  accountsUrl: "https://www.codebuddy.cn/v2/plugin/accounts",
+  refreshUrl: "https://www.codebuddy.cn/v2/plugin/auth/token/refresh",
+  userAgent: "CLI/2.63.2 CodeBuddy/2.63.2",
+  domain: "www.codebuddy.cn",
+  platform: "CLI",
+  pollInterval: 5000,
+};
+
 // OAuth timeout (5 minutes)
 export const OAUTH_TIMEOUT = 300000;
 
@@ -281,4 +300,5 @@ export const PROVIDERS = {
   CLINE: "cline",
   GITLAB: "gitlab",
   CODEBUDDY: "codebuddy",
+  CODEBUDDY_CN: "codebuddy-cn",
 };
