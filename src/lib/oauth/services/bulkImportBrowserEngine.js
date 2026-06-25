@@ -77,7 +77,7 @@ async function launchCamoufox({ proxyUrl } = {}) {
   const runtime = loadRuntimeHelper("camoufoxRuntime");
   if (!runtime?.ensureCamoufoxRuntime) {
     const err = new Error(
-      `Camoufox runtime helper missing. Reinstall wyxrouter or pick the Chromium engine.`
+      `Camoufox runtime helper missing. Reinstall zevairouter or pick the Chromium engine.`
     );
     err.code = "CAMOUFOX_RUNTIME_HELPER_MISSING";
     throw err;

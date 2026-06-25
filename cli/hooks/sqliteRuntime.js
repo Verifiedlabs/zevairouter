@@ -1,18 +1,23 @@
 // Ensure better-sqlite3 is installed in USER_DATA_DIR/runtime/node_modules
 // (user-writable, avoids Windows EBUSY locks during npm i -g updates).
 // sql.js is bundled in bin/app already; node:sqlite / bun:sqlite are built-in.
+//
+// NOTE: APP_NAME here MUST stay in sync with src/lib/dataDir.js (ESM). This
+// CommonJS copy exists because cli/ can't import the ESM src/ module at
+// runtime. Both resolve to ~/.zevai (or %APPDATA%/zevai on Windows).
 const { execSync, spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
+const APP_NAME = "zevai";
 const BETTER_SQLITE3_VERSION = "12.6.2";
 
 function getDataDir() {
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
   return process.platform === "win32"
-    ? path.join(process.env.APPDATA || os.homedir(), "9router")
-    : path.join(os.homedir(), ".9router");
+    ? path.join(process.env.APPDATA || os.homedir(), APP_NAME)
+    : path.join(os.homedir(), `.${APP_NAME}`);
 }
 
 function getRuntimeDir() {
@@ -31,10 +36,10 @@ function ensureRuntimeDir() {
   const pkgPath = path.join(dir, "package.json");
   if (!fs.existsSync(pkgPath)) {
     fs.writeFileSync(pkgPath, JSON.stringify({
-      name: "9router-runtime",
+      name: "zevai-runtime",
       version: "1.0.0",
       private: true,
-      description: "User-writable runtime deps for 9router (better-sqlite3 native binary)",
+      description: "User-writable runtime deps for ZevaiRouter (better-sqlite3 native binary)",
     }, null, 2));
   }
   return dir;

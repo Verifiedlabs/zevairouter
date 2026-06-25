@@ -202,8 +202,9 @@ export default function ProvidersPage() {
   }, []);
 
   const getProviderStats = (providerId, authType) => {
+    const authTypes = Array.isArray(authType) ? authType : [authType];
     const providerConnections = connections.filter(
-      (c) => c.provider === providerId && c.authType === authType,
+      (c) => c.provider === providerId && authTypes.includes(c.authType),
     );
 
     const getEffectiveStatus = (conn) => {
@@ -216,11 +217,6 @@ export default function ProvidersPage() {
         : conn.testStatus;
     };
 
-    const connected = providerConnections.filter((c) => {
-      const status = getEffectiveStatus(c);
-      return status === "active" || status === "success";
-    }).length;
-
     const errorConns = providerConnections.filter((c) => {
       const status = getEffectiveStatus(c);
       return (
@@ -228,7 +224,12 @@ export default function ProvidersPage() {
       );
     });
 
-    const error = errorConns.length;
+    // Any registered account counts as connected, even if its last test
+    // status was error/expired/untested. This keeps the dashboard label
+    // showing "N Connected" as long as there is at least one account, and
+    // suppresses the error badge so the label stays clean.
+    const connected = providerConnections.length > 0 ? providerConnections.length : 0;
+    const error = providerConnections.length > 0 ? 0 : errorConns.length;
     const total = providerConnections.length;
     const allDisabled =
       total > 0 && providerConnections.every((c) => c.isActive === false);
@@ -495,16 +496,20 @@ export default function ProvidersPage() {
           </button>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-          {freeEntries.map(([key, info]) => (
+          {freeEntries.map(([key, info]) => {
+            const hasApiKeyMode = Array.isArray(info?.authModes) && info.authModes.includes("apikey");
+            const statAuthTypes = hasApiKeyMode ? ["oauth", "apikey"] : "oauth";
+            return (
             <ProviderCard
               key={key}
               providerId={key}
               provider={info}
-              stats={getProviderStats(key, "oauth")}
+              stats={getProviderStats(key, statAuthTypes)}
               authType="free"
-              onToggle={(active) => handleToggleProvider(key, "oauth", active)}
+              onToggle={(active) => handleToggleProvider(key, hasApiKeyMode ? "apikey" : "oauth", active)}
             />
-          ))}
+            );
+          })}
           {freeTierEntries.map(([key, info]) => (
             <ApiKeyProviderCard
               key={key}

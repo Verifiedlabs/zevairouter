@@ -1,9 +1,9 @@
 {
   "name": "zevairouter",
-  "version": "0.4.84",
-  "description": "WYx0 fork of 9Router - AI Router with Kiro/CodeBuddy automation and quota tracking",
+  "version": "1.0.0",
+  "description": "ZevaiRouter - AI Router with provider automation, multi-account workflows, and quota tracking",
   "bin": {
-    "wyxrouter": "./cli/cli.js"
+    "zevai": "./cli/cli.js"
   },
   "files": [
     "cli/",
@@ -30,7 +30,7 @@
     "dev:bun": "bun --bun next dev --webpack --port 20128",
     "build:bun": "bun --bun next build --webpack",
     "start:bun": "bun ./.next/standalone/server.js",
-    "prepack": "echo 'Ensure cli/app is built before publishing: node cli/scripts/build-cli.js'",
+    "prepack": "node cli/scripts/build-cli.js",
     "postinstall": "node cli/hooks/postinstall.js || exit 0"
   },
   "dependencies": {
@@ -74,6 +74,7 @@
   "comment_camoufox_js": "optional stealth-Firefox engine for bulk-import; runtime auto-installs to user data dir if user picks Camoufox in the modal but the package is missing — Chromium remains the default and works without this dep",
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
+    "esbuild": "^0.25.12",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "postcss": "^8.5.6",
@@ -83,6 +84,8 @@
     "node": ">=20.0.0"
   },
   "keywords": [
+    "zevairouter",
+    "zevai",
     "ai",
     "router",
     "proxy",
@@ -99,5 +102,5 @@
     "type": "git",
     "url": "https://github.com/Verifiedlabs/zevairouter"
   },
-  "homepage": "https://9router.com"
+  "homepage": "https://github.com/Verifiedlabs/zevairouter"
 }

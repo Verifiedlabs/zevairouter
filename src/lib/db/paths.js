@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import { DATA_DIR } from "../dataDir.js";
+import { migrateLegacyDataDir } from "./dataDirMigration.js";
 
 export const DB_DIR = path.join(DATA_DIR, "db");
 export const DATA_FILE = path.join(DB_DIR, "data.sqlite");
@@ -12,6 +13,8 @@ export const LEGACY_FILES = {
   details: path.join(DATA_DIR, "request-details.json"),
 };
 export function ensureDirs() {
+  // First-touch: migrate legacy ~/.9router → ~/.zevai before creating dirs.
+  migrateLegacyDataDir(DATA_DIR);
   for (const dir of [DATA_DIR, DB_DIR, BACKUPS_DIR]) {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   }

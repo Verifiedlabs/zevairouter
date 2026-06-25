@@ -269,6 +269,7 @@ export const USAGE_SUPPORTED_PROVIDERS = [
   "antigravity",
   "kiro",
   "codebuddy",
+  "codebuddy-cn",
   "qoder",
   "github",
   "codex",
@@ -287,4 +288,6 @@ export const USAGE_APIKEY_PROVIDERS = [
   "glm-cn",
   "minimax",
   "minimax-cn",
+  "codebuddy",
+  "codebuddy-cn",
 ];

@@ -81,3 +81,11 @@ gitbook/README.md
 *-test.mjs
 pw-test.mjs
 repo.tar
+
+# CLI build artifacts
+cli/app/
+
+# local agent/cache dirs (not for committing)
+.playwright-mcp/
+.sisyphus/
+

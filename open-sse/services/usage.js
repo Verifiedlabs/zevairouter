@@ -53,7 +53,7 @@ const CLAUDE_CONFIG = {
 };
 
 const CODEBUDDY_CONFIG = {
-  usageUrl: "https://www.codebuddy.ai/v2/billing/meter/get-user-resource",
+  usageUrlPath: "/v2/billing/meter/get-user-resource",
   productCode: "p_tcaca",
   packageCodes: {
     free: "TCACA_code_001_PqouKr6QWV",
@@ -65,6 +65,16 @@ const CODEBUDDY_CONFIG = {
     extra: "TCACA_code_009_0XmEQc2xOf",
   },
 };
+
+// Build the billing/meter endpoint for the given provider-specific data.
+// Global edition uses www.codebuddy.ai; the China edition (codebuddy-cn)
+// is served from www.codebuddy.cn. The stored domain takes precedence;
+// otherwise the provider id determines the default domain.
+function getCodeBuddyUsageUrl(providerSpecificData = {}, provider = "codebuddy") {
+  const defaultDomain = provider === "codebuddy-cn" ? "www.codebuddy.cn" : "www.codebuddy.ai";
+  const domain = providerSpecificData?.domain || providerSpecificData?.rawAuth?.domain || defaultDomain;
+  return `https://${domain}${CODEBUDDY_CONFIG.usageUrlPath}`;
+}
 
 /**
  * Get usage data for a provider connection
@@ -92,9 +102,8 @@ export async function getUsageForProvider(connection, proxyOptions = null) {
     case "kiro":
       return await getKiroUsage(accessToken, providerSpecificData, proxyOptions);
     case "codebuddy":
-      return await getCodeBuddyUsage(accessToken, providerSpecificData, proxyOptions, apiKey);
     case "codebuddy-cn":
-      return { message: "Usage API not implemented for codebuddy-cn (China edition uses different billing schema)" };
+      return await getCodeBuddyUsage(accessToken, providerSpecificData, proxyOptions, apiKey, provider);
     case "qoder":
       return await getQoderUsage(accessToken, proxyOptions);
     case "qwen":
@@ -114,11 +123,12 @@ export async function getUsageForProvider(connection, proxyOptions = null) {
   }
 }
 
-async function fetchCodeBuddyUid(accessToken, providerSpecificData = {}, proxyOptions = null) {
+async function fetchCodeBuddyUid(accessToken, providerSpecificData = {}, proxyOptions = null, provider = "codebuddy") {
   const cachedUid = providerSpecificData?.uid || providerSpecificData?.rawAuth?.uid;
   if (cachedUid) return { uid: cachedUid, enterpriseId: providerSpecificData?.enterpriseId || null };
 
-  const domain = providerSpecificData?.domain || providerSpecificData?.rawAuth?.domain || "www.codebuddy.ai";
+  const defaultDomain = provider === "codebuddy-cn" ? "www.codebuddy.cn" : "www.codebuddy.ai";
+  const domain = providerSpecificData?.domain || providerSpecificData?.rawAuth?.domain || defaultDomain;
   try {
     const response = await proxyAwareFetch(`https://${domain}/v2/plugin/accounts`, {
       method: "GET",
@@ -143,31 +153,42 @@ async function fetchCodeBuddyUid(accessToken, providerSpecificData = {}, proxyOp
   }
 }
 
-async function getCodeBuddyUsage(accessToken, providerSpecificData = {}, proxyOptions = null, apiKey = null) {
-  if (!accessToken) {
-    if (apiKey) {
-      return {
-        plan: "CodeBuddy",
-        message: "CodeBuddy chat key active. Upstream quota is unavailable without a valid IDE OAuth token; use ZevaiRouter Usage for local request and token tracking.",
-        quotas: {},
-        authMode: "generated-api-key",
-        trackingMode: "local-router",
-      };
-    }
+async function getCodeBuddyUsage(accessToken, providerSpecificData = {}, proxyOptions = null, apiKey = null, provider = "codebuddy") {
+  // Prefer the IDE OAuth token; fall back to the API key (chat key) when no
+  // OAuth token is stored. The billing/meter endpoint on both the global (.ai)
+  // and China (.cn) editions accepts the API key via Authorization: Bearer +
+  // X-Api-Key, so even zevairouter-generated chat keys are tried. If the
+  // endpoint rejects the key (401/403) we fall back to the local-router
+  // tracking message instead of throwing.
+  const isGeneratedKey = providerSpecificData?.authMode === "generated-api-key";
+  const effectiveToken = accessToken || apiKey;
+  const authMode = accessToken ? "oauth" : apiKey ? "api-key" : null;
+
+  if (!effectiveToken) {
     return {
       plan: "CodeBuddy",
-      message: "CodeBuddy upstream quota is unavailable because no valid IDE OAuth token is stored.",
+      message: "CodeBuddy upstream quota is unavailable because no valid IDE OAuth token or API key is stored.",
       quotas: {},
       trackingMode: "unavailable",
     };
   }
 
-  try {
-    const { uid, enterpriseId } = await fetchCodeBuddyUid(accessToken, providerSpecificData, proxyOptions);
+  // Local-router fallback message used when an API-key (chat key) connection
+  // cannot read upstream quota — e.g. a generated key the upstream rejects.
+  const chatKeyFallback = {
+    plan: "CodeBuddy",
+    message: "CodeBuddy chat key active. Upstream quota is unavailable without a valid IDE OAuth token; use ZevaiRouter Usage for local request and token tracking.",
+    quotas: {},
+    authMode: isGeneratedKey ? "generated-api-key" : "api-key",
+    trackingMode: "local-router",
+  };
 
-    const response = await proxyAwareFetch(CODEBUDDY_CONFIG.usageUrl, {
+  try {
+    const { uid, enterpriseId } = await fetchCodeBuddyUid(effectiveToken, providerSpecificData, proxyOptions, provider);
+
+    const response = await proxyAwareFetch(getCodeBuddyUsageUrl(providerSpecificData, provider), {
       method: "POST",
-      headers: buildCodeBuddyUsageHeaders(accessToken, providerSpecificData, uid, enterpriseId),
+      headers: buildCodeBuddyUsageHeaders(effectiveToken, providerSpecificData, uid, enterpriseId, apiKey),
       body: JSON.stringify(buildCodeBuddyUsageBody()),
     }, proxyOptions);
 
@@ -180,13 +201,18 @@ async function getCodeBuddyUsage(accessToken, providerSpecificData = {}, proxyOp
     }
 
     if (response.status === 401 || response.status === 403) {
-      return {
-        plan: "CodeBuddy",
-        message: `CodeBuddy IDE OAuth token was rejected (${response.status}). Upstream quota is unavailable; use ZevaiRouter Usage for local request and token tracking.`,
-        quotas: {},
-        authMode: "oauth-rejected",
-        trackingMode: "local-router",
-      };
+      // OAuth token rejected — surface explicitly (callers may force-refresh & retry).
+      if (authMode === "oauth") {
+        return {
+          plan: "CodeBuddy",
+          message: `CodeBuddy IDE OAuth token was rejected (${response.status}). Upstream quota is unavailable; use ZevaiRouter Usage for local request and token tracking.`,
+          quotas: {},
+          authMode: "oauth-rejected",
+          trackingMode: "local-router",
+        };
+      }
+      // API key (chat key) rejected — fall back to local-router tracking.
+      return chatKeyFallback;
     }
 
     if (!response.ok) {
@@ -199,7 +225,7 @@ async function getCodeBuddyUsage(accessToken, providerSpecificData = {}, proxyOp
 
     return {
       ...parseCodeBuddyUsage(payload),
-      authMode: "oauth",
+      authMode,
     };
   } catch (error) {
     return { plan: "CodeBuddy", message: `CodeBuddy connected. Unable to fetch quota: ${error.message}`, quotas: {} };
@@ -261,7 +287,7 @@ function buildCodeBuddyUsageBody() {
   };
 }
 
-function buildCodeBuddyUsageHeaders(accessToken, providerSpecificData = {}, uid = null, enterpriseId = null) {
+function buildCodeBuddyUsageHeaders(accessToken, providerSpecificData = {}, uid = null, enterpriseId = null, apiKey = null) {
   const domain = providerSpecificData?.domain || providerSpecificData?.rawAuth?.domain || "www.codebuddy.ai";
 
   const headers = {
@@ -271,6 +297,13 @@ function buildCodeBuddyUsageHeaders(accessToken, providerSpecificData = {}, uid 
     "Content-Type": "application/json",
     "X-Domain": domain,
   };
+
+  // When authenticating with an API key (chat key) instead of an IDE OAuth
+  // token, also send the key via X-Api-Key — the billing/meter endpoint on
+  // both the global (.ai) and China (.cn) editions accepts this header.
+  if (apiKey) {
+    headers["X-Api-Key"] = apiKey;
+  }
 
   if (uid) {
     headers["X-User-Id"] = uid;
