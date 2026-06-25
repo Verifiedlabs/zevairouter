@@ -1,6 +1,6 @@
 {
   "name": "zevairouter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ZevaiRouter - AI Router with provider automation, multi-account workflows, and quota tracking",
   "bin": {
     "zevai": "./cli/cli.js"
