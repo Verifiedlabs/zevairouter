@@ -74,7 +74,7 @@
   "comment_camoufox_js": "optional stealth-Firefox engine for bulk-import; runtime auto-installs to user data dir if user picks Camoufox in the modal but the package is missing — Chromium remains the default and works without this dep",
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
-    "esbuild": "^0.25.12",
+    "esbuild": "^0.28.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "postcss": "^8.5.6",
