@@ -1,6 +1,6 @@
 {
   "name": "zevairouter-cli",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "ZevaiRouter CLI - Start and manage ZevaiRouter server",
   "bin": {
     "zevai": "./cli.js"

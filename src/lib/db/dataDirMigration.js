@@ -17,7 +17,7 @@ function legacyDefaultDir() {
 }
 
 /**
- * One-time migration of the legacy ~/.9router data dir into the new data dir
+ * One-time migration of the legacy ~/.zevai data dir into the new data dir
  * (~/.zevai on macOS/Linux, %APPDATA%/zevai on Windows). Copies recursively
  * and leaves the legacy dir intact as a backup. Idempotent via a marker file.
  * Safe to call on every boot — no-ops once migrated or on fresh installs.
