@@ -56,12 +56,17 @@ async function initAdapter() {
   ensureDirs();
   // Order per runtime:
   //   Bun:  bun:sqlite → sql.js
-  //   Node: better-sqlite3 → node:sqlite (≥22.5) → sql.js
+  //   Node: node:sqlite (≥22.5, built-in, zero-compile) → better-sqlite3 → sql.js
+  //
+  // node:sqlite is tried FIRST on modern Node because it needs no native build
+  // and no npm install — this avoids the whole class of "better-sqlite3 ABI
+  // mismatch / failed to compile / sql-wasm.wasm missing" failures that bite
+  // global installs where the build Node and runtime Node differ.
   let adapter = await tryBunSqlite();
-  if (!adapter) adapter = await tryBetterSqlite();
   if (!adapter) adapter = await tryNodeSqlite();
+  if (!adapter) adapter = await tryBetterSqlite();
   if (!adapter) adapter = await trySqlJs();
-  if (!adapter) throw new Error("[DB] No SQLite driver available (bun/better/node/sql.js all failed)");
+  if (!adapter) throw new Error("[DB] No SQLite driver available (bun/node/better/sql.js all failed)");
 
   if (!state.logged) {
     console.log(`[DB] Driver: ${adapter.driver} | file: ${DATA_FILE}`);

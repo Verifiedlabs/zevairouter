@@ -1,6 +1,6 @@
 {
   "name": "zevairouter",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "ZevaiRouter - AI Router with provider automation, multi-account workflows, and quota tracking",
   "bin": {
     "zevai": "./cli/cli.js"
@@ -81,7 +81,7 @@
     "tailwindcss": "^4"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.5.0"
   },
   "keywords": [
     "zevairouter",

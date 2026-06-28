@@ -32,7 +32,12 @@ const nextConfig = {
       // require(`../../../../cli/hooks/${name}`) the file tracer can't follow, so the
       // standalone build omitted cli/hooks entirely and bulk import ran a stale
       // "playwright installed but cannot be required" path. Force-include them.
-      "./cli/hooks/**/*"
+      "./cli/hooks/**/*",
+      // sql.js loads its wasm binary (sql-wasm.wasm) through a runtime path the
+      // tracer can't follow, so the standalone build dropped it and the sql.js
+      // fallback crashed with "ENOENT sql-wasm.wasm". Force-include the package
+      // so the universal pure-JS fallback always works (no native build needed).
+      "./node_modules/sql.js/**/*"
     ]
   },
   images: {
