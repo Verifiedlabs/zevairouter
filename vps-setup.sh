@@ -55,7 +55,7 @@ echo "zevai: $("$ZEVAI_BIN" --version) ($ZEVAI_BIN)"
 # ---------------------------------------------------------------------------
 log "[4/7] Smoke test (foreground, 12s) — verify DB driver loads"
 rm -f /tmp/zevai-smoke.log
-( "$ZEVAI_BIN" --port "$PORT" --no-browser > /tmp/zevai-smoke.log 2>&1 & echo $! > /tmp/zevai-smoke.pid )
+( "$ZEVAI_BIN" --port "$PORT" --no-browser --skip-update > /tmp/zevai-smoke.log 2>&1 & echo $! > /tmp/zevai-smoke.pid )
 sleep 12
 SMOKE_PID="$(cat /tmp/zevai-smoke.pid 2>/dev/null)"
 echo "--- smoke log ---"; tail -20 /tmp/zevai-smoke.log
@@ -79,7 +79,7 @@ User=root
 Environment="PATH=$NODE_DIR:/usr/local/bin:/usr/bin:/bin"
 Environment="PORT=$PORT"
 Environment="HOSTNAME=0.0.0.0"
-ExecStart=$ZEVAI_BIN --port $PORT --no-browser
+ExecStart=$ZEVAI_BIN --port $PORT --no-browser --skip-update
 Restart=always
 RestartSec=3
 StandardOutput=append:/var/log/zevairouter.log
@@ -88,7 +88,7 @@ StandardError=append:/var/log/zevairouter.log
 [Install]
 WantedBy=multi-user.target
 EOF
-echo "Unit written. ExecStart=$ZEVAI_BIN --port $PORT --no-browser"
+echo "Unit written. ExecStart=$ZEVAI_BIN --port $PORT --no-browser --skip-update"
 
 # ---------------------------------------------------------------------------
 log "[6/7] Reload + restart service"
