@@ -18,7 +18,7 @@ skills/
 # Temp/build files
 .next/
 .next-cli-build/
-node_modules/
+/node_modules/
 *.tar
 codebuddy-model-*.json
 
