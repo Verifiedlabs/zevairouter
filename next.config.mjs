@@ -13,7 +13,7 @@ const proxyClientMaxBodySize = process.env.ZEVAI_PROXY_CLIENT_MAX_BODY_SIZE || "
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   output: "standalone",
-  serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite", "playwright", "playwright-core"],
+  serverExternalPackages: ["better-sqlite3", "sql.js", "node:sqlite", "bun:sqlite", "playwright", "playwright-core", "camoufox-js"],
   turbopack: {
     root: tracingRoot
   },
@@ -33,6 +33,10 @@ const nextConfig = {
       // standalone build omitted cli/hooks entirely and bulk import ran a stale
       // "playwright installed but cannot be required" path. Force-include them.
       "./cli/hooks/**/*",
+      // camoufox-js (optional stealth Firefox engine) is loaded via a runtime
+      // require in camoufoxRuntime.js. It's externalized above so webpack won't
+      // bundle it, but the standalone tracer still needs the package on disk.
+      "./node_modules/camoufox-js/**/*",
       // sql.js loads its wasm binary (sql-wasm.wasm) through a runtime path the
       // tracer can't follow, so the standalone build dropped it and the sql.js
       // fallback crashed with "ENOENT sql-wasm.wasm". Force-include the package

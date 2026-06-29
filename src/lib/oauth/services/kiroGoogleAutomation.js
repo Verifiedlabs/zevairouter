@@ -475,6 +475,18 @@ function isGoogleAuthPage(page) {
   }
 }
 
+// Google bounces flagged (headless) browsers to myaccount.google.com/not-supported
+// at the OAuth consent step; from there the page often drifts to about.google.
+function isBlockedBrowserPage(page) {
+  try {
+    const url = new URL(page.url());
+    if (url.pathname.startsWith("/not-supported")) return true;
+    return url.hostname === "about.google" || url.hostname.endsWith(".about.google");
+  } catch {
+    return false;
+  }
+}
+
 function isProviderPage(page) {
   try {
     const url = new URL(page.url());
@@ -1230,6 +1242,100 @@ export function createKiroCallbackMonitor(context, page, timeoutMs = DEFAULT_MAN
   return promise;
 }
 
+// Parse any OAuth redirect callback URL (e.g. http://localhost:8080/callback?code=...)
+// against a configurable prefix. Returns { callbackUrl, code, state } or null.
+function parseCallbackUrlWithPrefix(rawUrl, prefix) {
+  if (!rawUrl || !prefix || !rawUrl.startsWith(prefix)) return null;
+  const queryIndex = rawUrl.indexOf("?");
+  const params = new URLSearchParams(queryIndex >= 0 ? rawUrl.slice(queryIndex + 1) : "");
+  const code = params.get("code");
+  const state = params.get("state");
+  if (!code) return null;
+  return { callbackUrl: rawUrl, code, state };
+}
+
+// Generic version of createKiroCallbackMonitor for authorization_code providers
+// whose redirect_uri is an http(s) loopback (e.g. Antigravity → http://localhost:8080/callback).
+// The browser may fail to actually load the loopback (connection refused), but the
+// request/framenavigated/requestfailed events still fire with the URL+code, which we capture.
+export function createGenericCallbackMonitor(context, page, { prefix, timeoutMs = DEFAULT_MANUAL_TIMEOUT_MS } = {}) {
+  let resolveOuter;
+  let rejectOuter;
+  const promise = new Promise((resolve, reject) => {
+    resolveOuter = resolve;
+    rejectOuter = reject;
+  });
+
+  let settled = false;
+  const trackedPages = new Set();
+  const contextCleanups = new Map();
+  const timeoutHandle = setTimeout(() => {
+    settle(null, new Error("Timed out waiting for OAuth callback"));
+  }, timeoutMs);
+
+  function settle(result, error = null) {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timeoutHandle);
+    for (const fns of contextCleanups.values()) {
+      for (const fn of fns) {
+        try { fn(); } catch {}
+      }
+    }
+    contextCleanups.clear();
+    if (error) rejectOuter(error);
+    else resolveOuter(result);
+  }
+
+  function registerPage(trackedPage, ownerCleanups) {
+    if (!trackedPage || trackedPages.has(trackedPage)) return;
+    trackedPages.add(trackedPage);
+
+    const check = (url) => {
+      const parsed = parseCallbackUrlWithPrefix(url || "", prefix);
+      if (parsed) settle(parsed);
+    };
+    const onFrame = (frame) => check(frame?.url?.() || "");
+    const onRequest = (request) => check(request?.url?.() || "");
+    const onRequestFailed = (request) => check(request?.url?.() || "");
+    const onLoadState = () => check(trackedPage.url?.() || "");
+
+    trackedPage.on("framenavigated", onFrame);
+    trackedPage.on("request", onRequest);
+    trackedPage.on("requestfailed", onRequestFailed);
+    trackedPage.on("domcontentloaded", onLoadState);
+    trackedPage.on("load", onLoadState);
+
+    ownerCleanups.push(() => {
+      trackedPage.off("framenavigated", onFrame);
+      trackedPage.off("request", onRequest);
+      trackedPage.off("requestfailed", onRequestFailed);
+      trackedPage.off("domcontentloaded", onLoadState);
+      trackedPage.off("load", onLoadState);
+    });
+
+    check(trackedPage.url?.() || "");
+  }
+
+  function bind(ctx, pg) {
+    if (settled) return;
+    if (contextCleanups.has(ctx)) return;
+    const cleanups = [];
+    contextCleanups.set(ctx, cleanups);
+    const onPage = (newPage) => registerPage(newPage, cleanups);
+    ctx.on("page", onPage);
+    cleanups.push(() => ctx.off("page", onPage));
+    if (pg) registerPage(pg, cleanups);
+  }
+
+  bind(context, page);
+  promise.rebind = ({ context: newContext, page: newPage } = {}) => {
+    if (newContext) bind(newContext, newPage);
+  };
+
+  return promise;
+}
+
 export async function runGoogleAccountAutomation({
   page,
   authUrl,
@@ -1292,6 +1398,18 @@ export async function runGoogleAccountAutomation({
     const handledGoogleConsent = await handleGoogleConsent(page, reportStep);
     if (handledGoogleConsent) {
       continue;
+    }
+
+    // Headless Chromium gets bounced to myaccount.google.com/not-supported at the
+    // OAuth consent step. From there the broad Google-button selectors wander onto
+    // about.google and loop until timeout. Detect the dead-end and bail to manual
+    // (the Camoufox engine avoids this by not being flagged as headless).
+    if (isBlockedBrowserPage(page)) {
+      reportStep("manual_assist_required", "Google blocked the automated browser (not-supported). Use the Camoufox engine or complete manually.");
+      return {
+        status: "needs_manual",
+        error: "Google blocked the automated browser at the OAuth consent step (not-supported page). Switch to the Camoufox engine or finish this account manually.",
+      };
     }
 
     const text = await readPageText(page);

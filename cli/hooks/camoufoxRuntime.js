@@ -14,17 +14,25 @@ const { runNpmInstall, getRuntimeDir, getRuntimeNodeModules } = require("./sqlit
 const CAMOUFOX_PACKAGE = "camoufox-js";
 const CAMOUFOX_VERSION = "^0.11.0";
 
+// This helper is reached through webpack-bundled server code, which rewrites
+// bare `require(...)` into its own module registry — so `require("camoufox-js")`
+// throws MODULE_NOT_FOUND even though the package is on disk. __non_webpack_require__
+// is left untouched by webpack and resolves to Node's real require at runtime;
+// outside webpack (plain CLI) it's undefined, so we fall back to require.
+const nodeRequire =
+  typeof __non_webpack_require__ === "function" ? __non_webpack_require__ : require;
+
 let cachedReady = null;
 
 function tryRequireCamoufox() {
   try {
-    return require(CAMOUFOX_PACKAGE);
+    return nodeRequire(CAMOUFOX_PACKAGE);
   } catch {}
   try {
     const runtimeNm = getRuntimeNodeModules();
     const candidate = path.join(runtimeNm, CAMOUFOX_PACKAGE);
     if (fs.existsSync(path.join(candidate, "package.json"))) {
-      return require(candidate);
+      return nodeRequire(candidate);
     }
   } catch {}
   return null;
@@ -32,12 +40,14 @@ function tryRequireCamoufox() {
 
 function findCamoufoxCli() {
   const candidates = [];
+  // camoufox-js ships its CLI entry as dist/__main__.js (there is no cli.js).
+  const rel = ["dist", "__main__.js"];
   try {
-    const pkgJson = require.resolve(`${CAMOUFOX_PACKAGE}/package.json`);
-    candidates.push(path.join(path.dirname(pkgJson), "dist", "cli.js"));
+    const pkgJson = nodeRequire.resolve(`${CAMOUFOX_PACKAGE}/package.json`);
+    candidates.push(path.join(path.dirname(pkgJson), ...rel));
   } catch {}
   try {
-    candidates.push(path.join(getRuntimeNodeModules(), CAMOUFOX_PACKAGE, "dist", "cli.js"));
+    candidates.push(path.join(getRuntimeNodeModules(), CAMOUFOX_PACKAGE, ...rel));
   } catch {}
   for (const candidate of candidates) {
     if (candidate && fs.existsSync(candidate)) return candidate;
@@ -64,6 +74,8 @@ function isCamoufoxBinaryAvailable() {
     path.join(dir, "camoufox"),
     path.join(dir, "camoufox", "camoufox.exe"),
     path.join(dir, "camoufox", "camoufox"),
+    // macOS ships the browser as an .app bundle, not a bare binary.
+    path.join(dir, "Camoufox.app", "Contents", "MacOS", "camoufox"),
   ];
   return candidates.some((p) => {
     try { return fs.existsSync(p); } catch { return false; }

@@ -340,6 +340,62 @@ function QoderAutomationPanel({ providerInfo, onRefresh }) {
   );
 }
 
+function AntigravityAutomationPanel({ providerInfo, onRefresh }) {
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [isOAuthOpen, setIsOAuthOpen] = useState(false);
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => setIsBulkOpen(true)}
+          className="flex min-h-[112px] min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-text-main">
+            <span className="material-symbols-outlined text-[20px] text-primary">group_add</span>
+            Auto Login Bulk
+          </span>
+          <span className="text-xs leading-relaxed text-text-muted">
+            Run bulk gmail:password or gmail|password automation via Google OAuth (authorization code) for Antigravity.
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsOAuthOpen(true)}
+          className="flex min-h-[112px] min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-text-main">
+            <span className="material-symbols-outlined text-[20px] text-primary">login</span>
+            OAuth Login
+          </span>
+          <span className="text-xs leading-relaxed text-text-muted">
+            Open Antigravity Google OAuth in browser and finish the consent manually.
+          </span>
+        </button>
+      </div>
+      <BulkAccountAutomationModal
+        isOpen={isBulkOpen}
+        provider="antigravity"
+        title="Antigravity Bulk GSuite Auto Login"
+        serviceName="Antigravity"
+        onSuccess={onRefresh}
+        onClose={() => setIsBulkOpen(false)}
+      />
+      <OAuthModal
+        isOpen={isOAuthOpen}
+        provider="antigravity"
+        providerInfo={providerInfo}
+        onSuccess={() => {
+          onRefresh?.();
+          setIsOAuthOpen(false);
+        }}
+        onClose={() => setIsOAuthOpen(false)}
+      />
+    </>
+  );
+}
+
 const AUTOMATION_PROVIDERS = [
   {
     id: "kiro",
@@ -364,6 +420,14 @@ const AUTOMATION_PROVIDERS = [
     description: "Bulk GSuite auto login via Google SSO and device flow.",
     supportedModes: ["bulk-account", "device-oauth"],
     component: QoderAutomationPanel,
+  },
+  {
+    id: "antigravity",
+    label: "Antigravity",
+    icon: "rocket_launch",
+    description: "Bulk GSuite auto login via Google OAuth (authorization code).",
+    supportedModes: ["bulk-account", "oauth"],
+    component: AntigravityAutomationPanel,
   },
 ];
 
