@@ -57,8 +57,10 @@ function findCamoufoxCli() {
 
 function getCamoufoxBinaryDir() {
   const homeDir = os.homedir();
+  // Mirror camoufox-js's userCacheDir() exactly (dist/pkgman.js) so we look in
+  // the same place it installs to, on every platform.
   if (process.platform === "win32") {
-    return path.join(process.env.LOCALAPPDATA || path.join(homeDir, "AppData", "Local"), "camoufox");
+    return path.join(homeDir, "AppData", "Local", "camoufox", "camoufox", "Cache");
   }
   if (process.platform === "darwin") {
     return path.join(homeDir, "Library", "Caches", "camoufox");
@@ -66,20 +68,21 @@ function getCamoufoxBinaryDir() {
   return path.join(homeDir, ".cache", "camoufox");
 }
 
-function isCamoufoxBinaryAvailable() {
+// The launch binary camoufox-js resolves per OS (dist/pkgman.js LAUNCH_FILE),
+// relative to the install dir. Linux is the primary target (Ubuntu VPS).
+function getCamoufoxLaunchBinary() {
   const dir = getCamoufoxBinaryDir();
-  if (!fs.existsSync(dir)) return false;
-  const candidates = [
-    path.join(dir, "camoufox.exe"),
-    path.join(dir, "camoufox"),
-    path.join(dir, "camoufox", "camoufox.exe"),
-    path.join(dir, "camoufox", "camoufox"),
-    // macOS ships the browser as an .app bundle, not a bare binary.
-    path.join(dir, "Camoufox.app", "Contents", "MacOS", "camoufox"),
-  ];
-  return candidates.some((p) => {
-    try { return fs.existsSync(p); } catch { return false; }
-  });
+  if (process.platform === "win32") return path.join(dir, "camoufox.exe");
+  if (process.platform === "darwin") return path.join(dir, "Camoufox.app", "Contents", "MacOS", "camoufox");
+  return path.join(dir, "camoufox-bin");
+}
+
+function isCamoufoxBinaryAvailable() {
+  try {
+    return fs.existsSync(getCamoufoxLaunchBinary());
+  } catch {
+    return false;
+  }
 }
 
 function ensureCamoufoxPackage({ silent = false } = {}) {
@@ -132,6 +135,50 @@ function fetchCamoufoxBinary({ silent = false, timeout = 600_000 } = {}) {
   return { ok: false, reason };
 }
 
+function findPlaywrightCli() {
+  const candidates = [];
+  for (const pkg of ["playwright", "playwright-core"]) {
+    try {
+      candidates.push(path.join(path.dirname(nodeRequire.resolve(`${pkg}/package.json`)), "cli.js"));
+    } catch {}
+    try {
+      candidates.push(path.join(getRuntimeNodeModules(), pkg, "cli.js"));
+    } catch {}
+  }
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+// Camoufox is a patched Firefox; on a fresh Linux host it fails to launch with
+// "libgtk-3.so.0: cannot open shared object file" because the GUI/X libraries
+// aren't present. `playwright install-deps firefox` apt-installs them. This is
+// idempotent (no-op once satisfied) and only attempted on Linux as root, where
+// apt is available without a sudo prompt. Non-fatal: a missing lib surfaces as
+// a clear launch error later, and the user can run the command themselves.
+function ensureLinuxBrowserDeps({ silent = false } = {}) {
+  if (process.platform !== "linux") return { ok: true, skipped: "not-linux" };
+  if (typeof process.getuid === "function" && process.getuid() !== 0) {
+    if (!silent) console.log("\u2139 Skipping auto-install of Camoufox system libs (not root). If Camoufox fails to launch, run: npx playwright install-deps firefox");
+    return { ok: true, skipped: "not-root" };
+  }
+  const cliPath = findPlaywrightCli();
+  if (!cliPath) return { ok: true, skipped: "no-playwright-cli" };
+  if (!silent) console.log("\u23f3 Installing Camoufox system libraries (Linux, first run)...");
+  const res = spawnSync(process.execPath, [cliPath, "install-deps", "firefox"], {
+    stdio: silent ? ["ignore", "pipe", "pipe"] : "inherit",
+    timeout: 300_000,
+    encoding: "utf8",
+  });
+  if (res.status === 0) {
+    if (!silent) console.log("\u2705 Camoufox system libraries ready");
+    return { ok: true };
+  }
+  if (!silent) console.log("\u26a0 Could not auto-install system libs; if Camoufox fails to launch run: npx playwright install-deps firefox");
+  return { ok: false, reason: String(res.stderr || "").trim().split(/\r?\n/).pop()?.slice(0, 200) };
+}
+
 function ensureCamoufoxRuntime({ silent = false } = {}) {
   if (cachedReady === true) return { ok: true };
 
@@ -160,6 +207,11 @@ function ensureCamoufoxRuntime({ silent = false } = {}) {
       return { ok: false, error };
     }
   }
+
+  // Ensure Linux GUI libraries are present (idempotent). Runs even when the
+  // binary already existed — a host can have the binary but miss the libs (the
+  // libgtk-3.so.0 launch failure). Non-fatal; we cache readiness regardless.
+  ensureLinuxBrowserDeps({ silent });
 
   cachedReady = true;
   return { ok: true, module: pkg.module };
