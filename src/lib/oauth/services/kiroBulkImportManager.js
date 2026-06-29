@@ -364,6 +364,14 @@ async function defaultSocialExchange(args) {
 
 export async function createFreshContext(browser, proxy) {
   const contextOptions = proxy ? { proxy: { server: proxy } } : {};
+  // Camoufox (driven via firefox.launch) ships a juggler build whose
+  // Browser.setDefaultViewport rejects the isMobile field newer playwright-core
+  // sends, so newContext() throws "not described in this scheme". Passing
+  // viewport:null skips setDefaultViewport entirely — Camoufox manages the
+  // viewport/fingerprint itself. Chromium keeps playwright's default viewport.
+  let engineName = "";
+  try { engineName = browser.browserType().name(); } catch {}
+  if (engineName === "firefox") contextOptions.viewport = null;
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
   return { context, page };
