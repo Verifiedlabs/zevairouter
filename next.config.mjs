@@ -19,7 +19,12 @@ const nextConfig = {
   },
   outputFileTracingRoot: tracingRoot,
   outputFileTracingExcludes: {
-    "*": ["./gitbook/**/*"]
+    // cli/.build-home is a throwaway HOME the CLI build points at (HOME override
+    // in build-cli.js); the app writes a transient sqlite DB + rotating backups
+    // there during static generation. The tracer then tries to copy those
+    // already-deleted WAL/backup files and logs ENOENT. Nothing here belongs in
+    // the bundle, so exclude it.
+    "*": ["./gitbook/**/*", "./cli/.build-home/**/*"]
   },
   outputFileTracingIncludes: {
     // Playwright loads browsers.json + its browser registry through dynamic paths the
