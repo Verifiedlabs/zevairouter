@@ -4,8 +4,9 @@ import { getQoderBulkImportManager } from "@/lib/oauth/services/qoderBulkImportM
 export const dynamic = "force-dynamic";
 
 export async function POST(_request, { params }) {
+  const { jobId, workerId } = await params;
   const manager = getQoderBulkImportManager();
-  const result = await manager.openManualSession(params.jobId, params.workerId);
+  const result = await manager.openManualSession(jobId, workerId);
 
   if (!result) {
     return NextResponse.json({ error: "Bulk import job not found" }, { status: 404 });

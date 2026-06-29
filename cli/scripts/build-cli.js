@@ -184,10 +184,12 @@ function ensureModuleInBundle(pkg) {
   console.log(`✅ Bundled ${pkg}`);
 }
 ensureModuleInBundle("sql.js");
+ensureModuleInBundle("playwright");
+ensureModuleInBundle("playwright-core");
 const betterDir = path.join(cliAppDir, "node_modules", "better-sqlite3");
 if (fs.existsSync(betterDir)) {
   fs.rmSync(betterDir, { recursive: true, force: true });
-  console.log("✅ Stripped better-sqlite3 (lives in ~/.9router/runtime)");
+  console.log("✅ Stripped better-sqlite3 (lives in ~/.zevai/runtime)");
 }
 console.log("");
 

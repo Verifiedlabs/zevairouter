@@ -4,7 +4,7 @@ import { getQoderBulkImportManager, buildLookupResponse } from "@/lib/oauth/serv
 export const dynamic = "force-dynamic";
 
 export async function GET(_request, { params }) {
-  const { jobId } = params;
+  const { jobId } = await params;
   const manager = getQoderBulkImportManager();
 
   const job = await manager.getJobWithPreview(jobId);
