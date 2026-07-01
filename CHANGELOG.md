@@ -1,3 +1,10 @@
+# v1.0.15 (2026-07-01)
+
+Bulk import now auto-tunes worker count to the host — no more CPU pegged at 100% on small VPS.
+
+## Improvements
+- **Bulk import "Auto-detect" concurrency is now ON by default**: worker count is derived from the server's CPU/RAM (clamped to 1–8) instead of always starting at 4. On a small VPS (e.g. 2 vCPU / 2 GB) this settles at 1–2 workers, avoiding the CPU spike to 100% that happened when 4 headless browsers launched at once. You can still uncheck it and set the worker count manually.
+
 # v1.0.14 (2026-07-01)
 
 Branding cleanup — replaced leftover "9Router" references in user-facing surfaces with ZevaiRouter.

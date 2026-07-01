@@ -73,7 +73,7 @@ export default function BulkAccountAutomationModal({
   const completedRefreshJobsRef = useRef(new Set());
   const [bulkText, setBulkText] = useState("");
   const [concurrency, setConcurrency] = useState(String(DEFAULT_CONCURRENCY));
-  const [autoConcurrency, setAutoConcurrency] = useState(false);
+  const [autoConcurrency, setAutoConcurrency] = useState(true);
   const [engine, setEngine] = useState(DEFAULT_ENGINE);
   const [proxyPoolSelection, setProxyPoolSelection] = useState("");
   const [proxyPools, setProxyPools] = useState([]);
@@ -120,7 +120,7 @@ export default function BulkAccountAutomationModal({
   const resetState = useCallback(() => {
     setBulkText("");
     setConcurrency(String(DEFAULT_CONCURRENCY));
-    setAutoConcurrency(false);
+    setAutoConcurrency(true);
     setEngine(DEFAULT_ENGINE);
     setProxyPoolSelection("");
     setActiveJob(null);
