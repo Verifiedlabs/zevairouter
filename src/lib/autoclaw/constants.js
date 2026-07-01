@@ -52,3 +52,12 @@ export function buildAutoClawAuthHeaders(extra = {}) {
     ...extra,
   };
 }
+
+// Wallet/asset endpoints authenticate via `authorization: Bearer <token>`
+// (unlike chat, which uses X-Authorization with the RAW token). This helper
+// normalizes the token (strips any existing "Bearer ") and re-applies it so
+// the balance/quota calls always send the correct shape.
+export function buildAutoClawWalletHeaders(accessToken) {
+  const raw = String(accessToken || "").replace(/^Bearer\s+/i, "");
+  return buildAutoClawAuthHeaders({ authorization: `Bearer ${raw}` });
+}

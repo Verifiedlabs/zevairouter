@@ -1698,10 +1698,10 @@ async function getAutoclawUsage(accessToken, proxyOptions = null) {
     return { message: "AutoClaw usage unavailable: no access token" };
   }
   try {
-    const { AUTOCLAW_WALLET_ENDPOINT, buildAutoClawAuthHeaders } = await import("../../src/lib/autoclaw/constants.js");
+    const { AUTOCLAW_WALLET_ENDPOINT, buildAutoClawWalletHeaders } = await import("../../src/lib/autoclaw/constants.js");
     const response = await proxyAwareFetch(
       AUTOCLAW_WALLET_ENDPOINT,
-      { method: "GET", headers: buildAutoClawAuthHeaders({ authorization: accessToken }) },
+      { method: "GET", headers: buildAutoClawWalletHeaders(accessToken) },
       proxyOptions,
     );
     if (!response.ok) {

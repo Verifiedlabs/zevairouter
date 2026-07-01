@@ -261,10 +261,10 @@ async function testOAuthConnection(connection, effectiveProxy = null) {
   if (connection.provider === "autoclaw") {
     if (!connection.accessToken) return { valid: false, error: "No access token", refreshed: false };
     try {
-      const { AUTOCLAW_WALLET_ENDPOINT, buildAutoClawAuthHeaders } = await import("@/lib/autoclaw/constants");
+      const { AUTOCLAW_WALLET_ENDPOINT, buildAutoClawWalletHeaders } = await import("@/lib/autoclaw/constants");
       const res = await fetchWithConnectionProxy(
         AUTOCLAW_WALLET_ENDPOINT,
-        { method: "GET", headers: buildAutoClawAuthHeaders({ authorization: connection.accessToken }) },
+        { method: "GET", headers: buildAutoClawWalletHeaders(connection.accessToken) },
         effectiveProxy,
       );
       if (!res.ok) {

@@ -1,3 +1,10 @@
+# v1.0.21 (2026-07-01)
+
+Fix AutoClaw balance / "Unable to read balance".
+
+## Fixes
+- **AutoClaw balance & test connection** now authenticate the wallet endpoint with `authorization: Bearer <token>`. The wallet/asset API rejects the raw token (returns "user not logged in"), even though chat works with the raw `X-Authorization` token. Points now display and test connection passes for healthy accounts.
+
 # v1.0.20 (2026-07-01)
 
 New feature: Context Injection — inject your own system-prompt files into every request.

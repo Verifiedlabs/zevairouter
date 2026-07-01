@@ -19,6 +19,7 @@ import {
   AUTOCLAW_REDIRECT_URI,
   AUTOCLAW_WALLET_ENDPOINT,
   buildAutoClawAuthHeaders,
+  buildAutoClawWalletHeaders,
 } from "../../autoclaw/constants.js";
 
 const AUTOCLAW_PROVIDER_ID = "autoclaw";
@@ -60,7 +61,7 @@ async function fetchAutoClawBalance(accessToken, proxyOptions) {
   try {
     const response = await proxyAwareFetch(
       AUTOCLAW_WALLET_ENDPOINT,
-      { method: "GET", headers: buildAutoClawAuthHeaders({ authorization: accessToken }) },
+      { method: "GET", headers: buildAutoClawWalletHeaders(accessToken) },
       proxyOptions,
     );
     if (!response.ok) return null;
