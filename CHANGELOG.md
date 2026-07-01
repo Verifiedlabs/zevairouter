@@ -1,3 +1,10 @@
+# v1.0.26 (2026-07-01)
+
+Removed the Skills page.
+
+## Changes
+- Removed the "Skills" sidebar entry and page (the copy-a-URL agent-skills feature). Context Injection (soul.md/agent.md upload + inject) covers custom agent behavior now.
+
 # v1.0.25 (2026-07-01)
 
 Automation: typed accounts no longer lost when switching tabs.
