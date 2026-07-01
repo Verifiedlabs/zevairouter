@@ -56,7 +56,7 @@ export function getPlatformEnum() {
 }
 
 export function getPlatformUserAgent() {
-  return `antigravity/1.104.0 ${platform()}/${arch()}`;
+  return antigravityUserAgent();
 }
 
 export const CLIENT_METADATA = {
@@ -124,9 +124,34 @@ export const AG_DEFAULT_TOOLS = new Set([
   "write_to_file"
 ]);
 
+// Antigravity desktop client fingerprint. The real Antigravity app is an
+// Electron/Chromium build; matching its User-Agent (instead of a bare
+// "antigravity/x.y.z linux/x64") avoids the third-party-client signal Google
+// uses to flag accounts. Chrome/Electron versions synced with the Antigravity
+// desktop build (see OmniRoute antigravityHeaders.ts).
+export const ANTIGRAVITY_VERSION = "1.107.0";
+export const ANTIGRAVITY_CHROME_VERSION = "142.0.7444.175";
+export const ANTIGRAVITY_ELECTRON_VERSION = "39.2.3";
+
+function antigravityPlatformInfo() {
+  switch (platform()) {
+    case "darwin":
+      return "Macintosh; Intel Mac OS X 10_15_7";
+    case "win32":
+      return "Windows NT 10.0; Win64; x64";
+    case "linux":
+    default:
+      return "X11; Linux x86_64";
+  }
+}
+
+export function antigravityUserAgent() {
+  return `Antigravity/${ANTIGRAVITY_VERSION} (${antigravityPlatformInfo()}) Chrome/${ANTIGRAVITY_CHROME_VERSION} Electron/${ANTIGRAVITY_ELECTRON_VERSION}`;
+}
+
 // Antigravity chat/stream headers
 export const ANTIGRAVITY_HEADERS = {
-  "User-Agent": `antigravity/1.107.0 ${platform()}/${arch()}`
+  "User-Agent": antigravityUserAgent()
 };
 
 // Cloud Code Assist API

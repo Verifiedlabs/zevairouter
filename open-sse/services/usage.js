@@ -31,7 +31,16 @@ const MINIMAX_USAGE_URLS = {
 
 // Antigravity API config (from Quotio)
 const ANTIGRAVITY_CONFIG = {
-  quotaApiUrl: "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+  // Multiple upstream domains — Google routes free/paid accounts differently and
+  // some hosts 403 where others 200. Try in order until one answers (ported from
+  // OmniRoute antigravityUpstream.ts).
+  quotaApiHosts: [
+    "https://daily-cloudcode-pa.googleapis.com",
+    "https://cloudcode-pa.googleapis.com",
+    "https://daily-cloudcode-pa.sandbox.googleapis.com",
+  ],
+  fetchAvailableModelsPath: "/v1internal:fetchAvailableModels",
+  retrieveUserQuotaPath: "/v1internal:retrieveUserQuota",
   loadProjectApiUrl: "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
   tokenUrl: "https://oauth2.googleapis.com/token",
   clientId: "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
@@ -94,7 +103,7 @@ export async function getUsageForProvider(connection, proxyOptions = null) {
     case "gemini-cli":
       return await getGeminiUsage(accessToken, providerDataWithProjectId, proxyOptions);
     case "antigravity":
-      return await getAntigravityUsage(accessToken, providerSpecificData, proxyOptions);
+      return await getAntigravityUsage(accessToken, providerDataWithProjectId, proxyOptions);
     case "claude":
       return await getClaudeUsage(accessToken, proxyOptions);
     case "codex":
@@ -659,51 +668,88 @@ async function getGeminiSubscriptionInfo(accessToken, proxyOptions = null) {
 }
 
 /**
- * Antigravity Usage - Fetch quota from Google Cloud Code API
+ * POST to the first Antigravity host that answers (2xx/401/403). Returns
+ * { response, host } or throws if every host is unreachable.
  */
-async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptions = null) {
-  try {
-    // Fetch subscription info once \u2014 reuse for both projectId and plan
-    const subscriptionInfo = await getAntigravitySubscriptionInfo(accessToken, proxyOptions);
-    const projectId = subscriptionInfo?.cloudaicompanionProject || null;
-
-    // Fetch quota data with timeout
+async function antigravityQuotaFetch(path, accessToken, bodyObj, proxyOptions) {
+  let lastError = null;
+  for (const host of ANTIGRAVITY_CONFIG.quotaApiHosts) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
-    let response;
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
-      response = await proxyAwareFetch(ANTIGRAVITY_CONFIG.quotaApiUrl, {
+      const response = await proxyAwareFetch(`${host}${path}`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${accessToken}`,
           "User-Agent": ANTIGRAVITY_CONFIG.userAgent,
           "Content-Type": "application/json",
-          "X-Client-Name": "antigravity",
-          "X-Client-Version": "1.107.0",
           "x-request-source": "local", // MITM bypass
         },
-        body: JSON.stringify({
-          ...(projectId ? { project: projectId } : {})
-        }),
+        body: JSON.stringify(bodyObj || {}),
         signal: controller.signal,
       }, proxyOptions);
+      // A definitive answer (ok, or auth/permission verdict) ends the loop; only
+      // transient upstream errors (5xx / network) fall through to the next host.
+      if (response.ok || response.status === 401 || response.status === 403) {
+        return { response, host };
+      }
+      lastError = new Error(`Antigravity API error: ${response.status}`);
+    } catch (error) {
+      lastError = error;
     } finally {
       clearTimeout(timeoutId);
     }
+  }
+  if (lastError) throw lastError;
+  throw new Error("Antigravity API unavailable");
+}
 
-    if (response.status === 403) {
-      return {
-        message: "Antigravity quota API access forbidden. Chat may still work.",
-        quotas: {}
-      };
+/**
+ * Antigravity Usage - Fetch quota from Google Cloud Code API.
+ *
+ * Two upstream sources are merged:
+ *   - fetchAvailableModels: catalog + per-model quotaInfo (can be stale/full).
+ *   - retrieveUserQuota:    per-model consumption buckets (source of truth).
+ * retrieveUserQuota wins when it reports a model, matching OmniRoute behaviour.
+ */
+async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptions = null) {
+  try {
+    // Prefer the projectId stored on the connection; fall back to loadCodeAssist.
+    const savedProjectId = normalizeCloudCodeProjectId(providerSpecificData?.projectId);
+    let subscriptionInfo = null;
+    let projectId = savedProjectId;
+    if (!projectId) {
+      subscriptionInfo = await getAntigravitySubscriptionInfo(accessToken, proxyOptions);
+      projectId = normalizeCloudCodeProjectId(subscriptionInfo?.cloudaicompanionProject);
     }
 
+    // fetchAvailableModels (catalog) \u2014 required. retrieveUserQuota (live) \u2014 best effort.
+    let modelsResp;
+    try {
+      modelsResp = await antigravityQuotaFetch(
+        ANTIGRAVITY_CONFIG.fetchAvailableModelsPath,
+        accessToken,
+        projectId ? { project: projectId } : {},
+        proxyOptions
+      );
+    } catch (error) {
+      return { message: `Antigravity quota unavailable: ${error.message}. Chat may still work.` };
+    }
+
+    const response = modelsResp.response;
+
     if (response.status === 401) {
-      return {
-        message: "Antigravity quota API authentication expired. Chat may still work.",
-        quotas: {}
-      };
+      // Distinguish a dead account (refresh token revoked/deleted) from a merely
+      // stale access token, so the dashboard can tell the user which is which.
+      const deadReason = await getAntigravityAccountDeadReason(providerSpecificData, proxyOptions);
+      if (deadReason) {
+        return { accountDead: true, message: `Antigravity account ${deadReason}. Reconnect won't help \u2014 recreate the account.`, quotas: {} };
+      }
+      return { message: "Antigravity quota API authentication expired. Chat may still work.", quotas: {} };
+    }
+
+    if (response.status === 403) {
+      return { message: "Antigravity quota API access forbidden (tier may not expose quota). Chat may still work.", quotas: {} };
     }
 
     if (!response.ok) {
@@ -711,11 +757,33 @@ async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptio
     }
 
     const data = await response.json();
-    const quotas = {};
 
-    // Parse model quotas (inspired by vscode-antigravity-cockpit)
+    // Live consumption buckets keyed by modelId (source of truth).
+    // retrieveUserQuota works with or without a project — send the project when
+    // we have one, otherwise an empty body (Google resolves the default project).
+    const liveBuckets = new Map();
+    try {
+      const quotaResp = await antigravityQuotaFetch(
+        ANTIGRAVITY_CONFIG.retrieveUserQuotaPath,
+        accessToken,
+        projectId ? { project: projectId } : {},
+        proxyOptions
+      );
+      if (quotaResp.response.ok) {
+        const quotaData = await quotaResp.response.json();
+        if (Array.isArray(quotaData.buckets)) {
+          for (const bucket of quotaData.buckets) {
+            const id = String(bucket.modelId || "").trim();
+            if (id) liveBuckets.set(id, bucket);
+          }
+        }
+      }
+    } catch {
+      // Non-fatal: fall back to catalog-only quotaInfo.
+    }
+
+    const quotas = {};
     if (data.models) {
-      // Filter only recommended/important models (must match PROVIDER_MODELS ag ids)
       const importantModels = [
         'gemini-3-flash-agent',
         'gemini-3.5-flash-low',
@@ -729,32 +797,27 @@ async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptio
       ];
 
       for (const [modelKey, info] of Object.entries(data.models)) {
-        // Skip models without quota info
-        if (!info.quotaInfo) {
-          continue;
-        }
+        if (info.isInternal || !importantModels.includes(modelKey)) continue;
 
-        // Skip internal models and non-important models
-        if (info.isInternal || !importantModels.includes(modelKey)) {
-          continue;
-        }
+        // retrieveUserQuota bucket wins over the (possibly stale) catalog quotaInfo.
+        const live = liveBuckets.get(modelKey);
+        const quotaSource = live || info.quotaInfo;
+        if (!quotaSource) continue;
 
-        const remainingFraction = info.quotaInfo.remainingFraction || 0;
+        const remainingFraction = Number(quotaSource.remainingFraction) || 0;
         const remainingPercentage = remainingFraction * 100;
-
-        // Convert percentage to used/total for UI compatibility
         const total = 1000; // Normalized base
         const remaining = Math.round(total * remainingFraction);
-        const used = total - remaining;
+        const used = Math.max(0, total - remaining);
 
-        // Use modelKey as key (matches PROVIDER_MODELS id)
         quotas[modelKey] = {
           used,
           total,
-          resetAt: parseResetTime(info.quotaInfo.resetTime),
+          resetAt: parseResetTime(quotaSource.resetTime),
           remainingPercentage,
           unlimited: false,
           displayName: info.displayName || modelKey,
+          quotaSource: live ? "retrieveUserQuota" : "fetchAvailableModels",
         };
       }
     }
@@ -767,6 +830,48 @@ async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptio
   } catch (error) {
     console.error("[Antigravity Usage] Error:", error.message, error.cause);
     return { message: `Antigravity error: ${error.message}` };
+  }
+}
+
+/**
+ * Probe whether an Antigravity account is permanently dead (refresh token
+ * revoked / account deleted). Returns a short reason string, or null if the
+ * account looks alive (or we can't tell). Used to turn a misleading
+ * "authentication expired" into an actionable "account deleted" verdict.
+ */
+async function getAntigravityAccountDeadReason(providerSpecificData, proxyOptions = null) {
+  const refreshToken = providerSpecificData?.refreshToken;
+  if (!refreshToken) return null;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    let response;
+    try {
+      response = await proxyAwareFetch(ANTIGRAVITY_CONFIG.tokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: ANTIGRAVITY_CONFIG.clientId,
+          client_secret: ANTIGRAVITY_CONFIG.clientSecret,
+          refresh_token: refreshToken,
+          grant_type: "refresh_token",
+        }),
+        signal: controller.signal,
+      }, proxyOptions);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    if (response.ok) return null; // refresh works \u2192 account alive, token just stale
+    const body = await response.json().catch(() => ({}));
+    if (body.error === "invalid_grant") {
+      const desc = (body.error_description || "").toLowerCase();
+      if (desc.includes("deleted")) return "has been deleted";
+      if (desc.includes("disabled") || desc.includes("suspend")) return "is disabled/suspended";
+      return "authorization was revoked";
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 

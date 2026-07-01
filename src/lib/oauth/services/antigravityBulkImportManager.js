@@ -77,7 +77,7 @@ class AntigravityBulkImportManager extends KiroBulkImportManager {
       return;
     }
 
-    const { context, page } = await createFreshContext(job.browser);
+    const { context, page } = await createFreshContext(job.browser, account.proxyUrl);
     account.runtimeSession = { context, page };
 
     const redirectUri = getRedirectUri();

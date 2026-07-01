@@ -3,9 +3,16 @@ import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
 import { OAUTH_ENDPOINTS, ANTIGRAVITY_HEADERS, INTERNAL_REQUEST_HEADER, AG_DEFAULT_TOOLS, AG_TOOL_SUFFIX } from "../config/appConstants.js";
 import { HTTP_STATUS } from "../config/runtimeConfig.js";
-import { deriveSessionId } from "../utils/sessionManager.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { cleanJSONSchemaForAntigravity } from "../translator/helpers/geminiHelper.js";
+import { obfuscateRequestBody } from "../services/antigravityObfuscation.js";
+import { scrubProxyAndFingerprintHeaders } from "../services/antigravityHeaderScrub.js";
+import {
+  getAntigravitySessionId,
+  generateAntigravityRequestId,
+  getAntigravityEnvelopeUserAgent,
+  deriveAntigravityMachineId,
+} from "../services/antigravityIdentity.js";
 
 // Sanitize function name: Gemini requires [a-zA-Z_][a-zA-Z0-9_.:\-]{0,63}
 function sanitizeFunctionName(name) {
@@ -31,11 +38,13 @@ export class AntigravityExecutor extends BaseExecutor {
   }
 
   buildHeaders(credentials, stream = true, sessionId = null) {
+    const machineId = deriveAntigravityMachineId();
     return {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${credentials.accessToken}`,
       "User-Agent": this.config.headers?.["User-Agent"] || ANTIGRAVITY_HEADERS["User-Agent"],
       [INTERNAL_REQUEST_HEADER.name]: INTERNAL_REQUEST_HEADER.value,
+      ...(machineId && { "x-machine-id": machineId }),
       ...(sessionId && { "X-Machine-Session-Id": sessionId }),
       "Accept": stream ? "text/event-stream" : "application/json"
     };
@@ -91,7 +100,7 @@ export class AntigravityExecutor extends BaseExecutor {
       generationConfig,
       ...(contents && { contents }),
       ...(tools && { tools }),
-      sessionId: body.request?.sessionId || deriveSessionId(credentials?.email || credentials?.connectionId),
+      sessionId: body.request?.sessionId || getAntigravitySessionId(credentials),
       safetySettings: undefined,
       ...(tools?.length > 0 && { toolConfig: { functionCallingConfig: { mode: "VALIDATED" } } })
     };
@@ -100,9 +109,9 @@ export class AntigravityExecutor extends BaseExecutor {
       ...body,
       project: projectId,
       model: model,
-      userAgent: "antigravity",
+      userAgent: getAntigravityEnvelopeUserAgent(credentials),
       requestType: "agent",
-      requestId: `agent-${crypto.randomUUID()}`,
+      requestId: generateAntigravityRequestId(),
       request: transformedRequest
     };
   }
@@ -204,12 +213,20 @@ export class AntigravityExecutor extends BaseExecutor {
     const MAX_RETRY_AFTER_RETRIES = 3;
     const retryAttemptsByUrl = {}; // Track retry attempts per URL
     const retryAfterAttemptsByUrl = {}; // Track Retry-After retries per URL
+    let creditsRetried = false; // GOOGLE_ONE_AI credits fallback attempted once per request
+    let injectCredits = false; // when true, transformRequest output gets enabledCreditTypes
 
     for (let urlIndex = 0; urlIndex < fallbackCount; urlIndex++) {
       const url = this.buildUrl(model, stream, urlIndex);
-      const transformedBody = this.transformRequest(model, body, stream, credentials);
+      let transformedBody = this.transformRequest(model, body, stream, credentials);
+      // On a quota_exhausted 429, retry once using the account's Google One AI
+      // credit balance (often available on Pro accounts) instead of giving up.
+      if (injectCredits && transformedBody.request) {
+        transformedBody.enabledCreditTypes = ["GOOGLE_ONE_AI"];
+      }
+      transformedBody = obfuscateRequestBody(transformedBody);
       const sessionId = transformedBody.request?.sessionId;
-      const headers = this.buildHeaders(credentials, stream, sessionId);
+      const headers = scrubProxyAndFingerprintHeaders(this.buildHeaders(credentials, stream, sessionId));
 
       // Initialize retry counters for this URL
       if (!retryAttemptsByUrl[urlIndex]) {
@@ -232,15 +249,29 @@ export class AntigravityExecutor extends BaseExecutor {
           let retryMs = this.parseRetryHeaders(response.headers);
 
           // If no retry time in headers, try to parse from error message body
+          let errorMessageText = "";
           if (!retryMs) {
             try {
               const errorBody = await response.clone().text();
               const errorJson = JSON.parse(errorBody);
-              const errorMessage = errorJson?.error?.message || errorJson?.message || "";
-              retryMs = this.parseRetryFromErrorMessage(errorMessage);
+              errorMessageText = errorJson?.error?.message || errorJson?.message || "";
+              retryMs = this.parseRetryFromErrorMessage(errorMessageText);
             } catch (e) {
               // Ignore parse errors, will fall back to exponential backoff
             }
+          }
+
+          // Quota exhausted → retry once with Google One AI credits injected.
+          if (
+            response.status === HTTP_STATUS.RATE_LIMITED &&
+            !creditsRetried &&
+            /quota[_ ]?exhausted|quota reached|individual quota|enable overages/i.test(errorMessageText)
+          ) {
+            creditsRetried = true;
+            injectCredits = true;
+            log?.debug?.("RETRY", "429 quota exhausted → retrying once with GOOGLE_ONE_AI credits");
+            urlIndex--;
+            continue;
           }
 
           if (retryMs && retryMs <= MAX_RETRY_AFTER_MS && retryAfterAttemptsByUrl[urlIndex] < MAX_RETRY_AFTER_RETRIES) {
