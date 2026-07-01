@@ -1,3 +1,10 @@
+# v1.0.17 (2026-07-01)
+
+AutoClaw provider logo.
+
+## Fixes
+- Added the official AutoClaw logo so the provider no longer shows a plain text placeholder in provider lists and topology.
+
 # v1.0.16 (2026-07-01)
 
 New provider: AutoClaw (autoclaw.z.ai) — bulk auto-register + chat + points balance.
