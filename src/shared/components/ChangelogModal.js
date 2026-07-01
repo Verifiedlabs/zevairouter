@@ -18,7 +18,7 @@ export default function ChangelogModal({ isOpen, onClose }) {
     if (!isOpen || html) return;
     setLoading(true);
     setError("");
-    fetch(GITHUB_CONFIG.changelogUrl)
+    fetch(`${GITHUB_CONFIG.changelogUrl}?t=${Date.now()}`, { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();
