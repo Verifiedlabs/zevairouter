@@ -163,6 +163,22 @@ export const TABLES = {
       "CREATE INDEX IF NOT EXISTS idx_qc_provider ON quotaCache(provider)",
     ],
   },
+  // User-authored context files (soul.md, agent.md, …) injected into the
+  // system prompt of every chat request. `content` is markdown/plain text.
+  contextFiles: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      name: "TEXT NOT NULL",
+      content: "TEXT NOT NULL",
+      enabled: "INTEGER DEFAULT 1",
+      priority: "INTEGER DEFAULT 0",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_cf_enabled ON contextFiles(enabled, priority)",
+    ],
+  },
 };
 
 export function buildCreateTableSql(name, def) {

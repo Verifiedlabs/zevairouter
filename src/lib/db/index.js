@@ -33,6 +33,12 @@ export {
   deleteQuotaSnapshot, getCachedRemainingPercent,
 } from "./repos/quotaCacheRepo.js";
 
+// Context files (user-authored system-prompt injection)
+export {
+  listContextFiles, getEnabledContextFiles, getContextFile,
+  createContextFile, updateContextFile, deleteContextFile,
+} from "./repos/contextFilesRepo.js";
+
 // API keys
 export {
   getApiKeys, getApiKeyById, createApiKey, updateApiKey, deleteApiKey, validateApiKey,

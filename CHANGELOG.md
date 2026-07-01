@@ -1,3 +1,13 @@
+# v1.0.20 (2026-07-01)
+
+New feature: Context Injection — inject your own system-prompt files into every request.
+
+## Features
+- **Context Injection** (Sidebar → Context Inject): create your own context files (soul.md, agent.md, rules…) that get prepended to the system prompt of every chat request routed through ZevaiRouter, across all providers and formats (OpenAI / Claude / Gemini / Antigravity).
+  - Multi-file: add unlimited files, each with an enable toggle and injection order.
+  - Global on/off switch; shows how much text is added per request.
+  - Injection happens at one central point after format translation (mirrors the Caveman injector), so it works for every provider uniformly.
+
 # v1.0.19 (2026-07-01)
 
 AutoClaw connection fixes + branding cleanup.

@@ -4,6 +4,7 @@
  */
 
 import { handleChatCore } from "./chatCore.js";
+import { getSettings } from "@/lib/localDb.js";
 import { convertResponsesApiFormat } from "../translator/helpers/responsesApiHelper.js";
 import { createResponsesApiTransformStream } from "../transformer/responsesTransformer.js";
 import { convertResponsesStreamToJson } from "../transformer/streamToJsonConverter.js";
@@ -33,6 +34,12 @@ export async function handleResponsesCore({ body, modelInfo, credentials, log, o
   }
 
   // Call chat core handler — force sourceFormat so streaming path knows this is a Responses API client
+  let contextInjectionEnabled = false;
+  try {
+    const s = await getSettings();
+    contextInjectionEnabled = !!s.contextInjectionEnabled;
+  } catch { /* default off */ }
+
   const result = await handleChatCore({
     body: convertedBody,
     modelInfo,
@@ -42,6 +49,7 @@ export async function handleResponsesCore({ body, modelInfo, credentials, log, o
     onRequestSuccess,
     onDisconnect,
     connectionId,
+    contextInjectionEnabled,
     sourceFormatOverride: "openai-responses"
   });
 
