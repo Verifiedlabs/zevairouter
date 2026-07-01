@@ -1,3 +1,10 @@
+# v1.0.18 (2026-07-01)
+
+Automation page now shows real provider logos.
+
+## Fixes
+- The Automation page provider tabs and header used generic Material Symbols icons. They now render each provider's actual logo (Kiro, CodeBuddy, Qoder, Antigravity, AutoClaw), falling back to the icon only if the logo is missing.
+
 # v1.0.17 (2026-07-01)
 
 AutoClaw provider logo.

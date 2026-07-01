@@ -4,6 +4,30 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, BulkAccountAutomationModal, Card, CardSkeleton, KiroOAuthWrapper, OAuthModal } from "@/shared/components";
 import { FREE_PROVIDERS } from "@/shared/constants/providers";
 
+// Render the provider's real logo from /providers/<id>.png, falling back to
+// the Material Symbols icon when the image is missing or fails to load.
+function ProviderLogo({ id, icon, size = 22 }) {
+  const [imgError, setImgError] = useState(false);
+  if (imgError) {
+    return (
+      <span className="material-symbols-outlined text-primary" style={{ fontSize: size }}>
+        {icon}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={`/providers/${id}.png`}
+      alt=""
+      width={size}
+      height={size}
+      className="rounded object-contain"
+      style={{ width: size, height: size }}
+      onError={() => setImgError(true)}
+    />
+  );
+}
+
 function getConnectionLabel(count) {
   return `${count} connection${count === 1 ? "" : "s"}`;
 }
@@ -540,7 +564,7 @@ export default function AutomationPage() {
                   : "border-border bg-surface text-text-main hover:border-primary/30 hover:bg-primary/5"
               }`}
             >
-              <span className="material-symbols-outlined text-[22px]">{provider.icon}</span>
+              <ProviderLogo id={provider.id} icon={provider.icon} size={22} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold">{provider.label}</span>
                 <span className="mt-0.5 block text-xs text-text-muted">
@@ -557,7 +581,7 @@ export default function AutomationPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[22px] text-primary">{activeProvider.icon}</span>
+                <ProviderLogo id={activeProvider.id} icon={activeProvider.icon} size={22} />
                 <h2 className="text-lg font-semibold">{activeProvider.label}</h2>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
