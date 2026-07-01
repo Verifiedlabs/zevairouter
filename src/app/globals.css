@@ -510,11 +510,9 @@ button {
     0 1px 2px rgba(15, 23, 42, 0.05),
     0 10px 24px -10px rgba(15, 23, 42, 0.18),
     0 24px 48px -24px rgba(15, 23, 42, 0.22);
-  transform: perspective(1200px) translateZ(0);
-  transform-style: preserve-3d;
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+  transform: translateY(0);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
               box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
 }
 .card-3d::before {
   content: "";
@@ -527,7 +525,7 @@ button {
 }
 .card-3d > * { position: relative; z-index: 1; }
 .card-3d:hover {
-  transform: perspective(1200px) translateY(-3px) rotateX(1deg) rotateY(-1deg);
+  transform: translateY(-3px);
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
     0 2px 4px rgba(15, 23, 42, 0.06),
@@ -568,8 +566,8 @@ button {
     0 44px 80px -28px rgba(0, 0, 0, 0.72);
 }
 
-/* Respect reduced-motion: keep depth, drop the tilt/scale animation */
+/* Respect reduced-motion: keep depth, drop the movement */
 @media (prefers-reduced-motion: reduce) {
   .card-3d { transition: box-shadow 0.3s ease; }
-  .card-3d:hover { transform: perspective(1200px) translateY(-2px); }
+  .card-3d:hover { transform: none; }
 }
