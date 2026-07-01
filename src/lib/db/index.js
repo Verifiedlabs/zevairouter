@@ -27,6 +27,12 @@ export {
   createProxyPool, updateProxyPool, deleteProxyPool,
 } from "./repos/proxyPoolsRepo.js";
 
+// Quota cache (server-side per-account quota snapshots for routing)
+export {
+  saveQuotaSnapshot, getQuotaSnapshot, getAllQuotaSnapshots,
+  deleteQuotaSnapshot, getCachedRemainingPercent,
+} from "./repos/quotaCacheRepo.js";
+
 // API keys
 export {
   getApiKeys, getApiKeyById, createApiKey, updateApiKey, deleteApiKey, validateApiKey,

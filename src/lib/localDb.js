@@ -10,6 +10,8 @@ export {
   createProviderNode, updateProviderNode, deleteProviderNode,
   getProxyPools, getProxyPoolById,
   createProxyPool, updateProxyPool, deleteProxyPool,
+  saveQuotaSnapshot, getQuotaSnapshot, getAllQuotaSnapshots,
+  deleteQuotaSnapshot, getCachedRemainingPercent,
   getApiKeys, getApiKeyById, createApiKey, updateApiKey, deleteApiKey, validateApiKey,
   getCombos, getComboById, getComboByName,
   createCombo, updateCombo, deleteCombo,

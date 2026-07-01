@@ -1,4 +1,4 @@
-import { getProviderConnections, validateApiKey, updateProviderConnection, getSettings } from "@/lib/localDb";
+import { getProviderConnections, validateApiKey, updateProviderConnection, getSettings, getQuotaSnapshot } from "@/lib/localDb";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil, isNonAccountError } from "open-sse/services/accountFallback.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
@@ -181,6 +181,50 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
           consecutiveUseCount: 1
         });
       }
+    } else if (strategy === "most-quota") {
+      // Pick the connection with the most remaining quota for this model, read
+      // from the server-side quota cache (refreshed by the background loop).
+      // Connections with no cached snapshot are treated as unknown and ranked
+      // after any that have a known positive remaining. Falls back to priority
+      // order when nothing has usable cache data.
+      const scored = await Promise.all(
+        availableConnections.map(async (c) => {
+          let remaining = -1; // unknown
+          try {
+            const snap = await getQuotaSnapshot(c.id);
+            const quotas = snap?.usage?.quotas;
+            if (quotas && typeof quotas === "object") {
+              if (model && quotas[model] && typeof quotas[model].remainingPercentage === "number") {
+                remaining = quotas[model].remainingPercentage;
+              } else {
+                // No per-model entry — use the min remaining across models as a
+                // conservative proxy for "how much life this account has left".
+                const vals = Object.values(quotas)
+                  .map((q) => (typeof q?.remainingPercentage === "number" ? q.remainingPercentage : null))
+                  .filter((v) => v !== null);
+                if (vals.length) remaining = Math.min(...vals);
+              }
+            }
+          } catch { /* treat as unknown */ }
+          return { conn: c, remaining };
+        })
+      );
+
+      // Prefer known-positive remaining (highest first); unknown (-1) ranked by
+      // priority as a tiebreaker after known ones.
+      scored.sort((a, b) => {
+        if (a.remaining !== b.remaining) return b.remaining - a.remaining;
+        return (a.conn.priority || 999) - (b.conn.priority || 999);
+      });
+
+      // Skip accounts known to be fully exhausted (remaining === 0) unless every
+      // account is exhausted, in which case fall through to the best available.
+      const withQuota = scored.filter((s) => s.remaining !== 0);
+      connection = (withQuota[0] || scored[0]).conn;
+      await updateProviderConnection(connection.id, {
+        lastUsedAt: new Date().toISOString(),
+        consecutiveUseCount: 1,
+      });
     } else {
       // Default: fill-first (already sorted by priority in getProviderConnections)
       connection = availableConnections[0];

@@ -148,6 +148,21 @@ export const TABLES = {
       "CREATE INDEX IF NOT EXISTS idx_rd_conn ON requestDetails(connectionId)",
     ],
   },
+  // Server-side snapshot of upstream per-account quota, refreshed by a
+  // background loop. Lets routing read remaining quota synchronously without a
+  // live network call. One row per connection; `data` holds the quotas map +
+  // plan/message from getUsageForProvider.
+  quotaCache: {
+    columns: {
+      connectionId: "TEXT PRIMARY KEY",
+      provider: "TEXT",
+      data: "TEXT NOT NULL",
+      fetchedAt: "TEXT NOT NULL",
+    },
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_qc_provider ON quotaCache(provider)",
+    ],
+  },
 };
 
 export function buildCreateTableSql(name, def) {

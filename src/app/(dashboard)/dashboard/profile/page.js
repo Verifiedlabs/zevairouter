@@ -946,6 +946,21 @@ export default function ProfilePage() {
               </div>
             )}
 
+            {/* Most Quota (smart routing) */}
+            <div className="flex items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/50">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm sm:text-base">Most Quota</p>
+                <p className="text-xs sm:text-sm text-text-muted">
+                  Pick the account with the most remaining quota (uses cached usage)
+                </p>
+              </div>
+              <Toggle
+                checked={settings.fallbackStrategy === "most-quota"}
+                onChange={() => updateFallbackStrategy(settings.fallbackStrategy === "most-quota" ? "fill-first" : "most-quota")}
+                disabled={loading}
+              />
+            </div>
+
             {/* Combo Round Robin */}
             <div className="flex items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/50">
               <div className="flex-1 min-w-0">
