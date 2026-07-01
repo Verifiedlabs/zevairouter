@@ -1,3 +1,13 @@
+# v1.0.16 (2026-07-01)
+
+New provider: AutoClaw (autoclaw.z.ai) — bulk auto-register + chat + points balance.
+
+## Features
+- **AutoClaw provider** (OpenAI-compatible GLM/DeepSeek proxy by Z.ai). Adds an Automation panel with bulk Google-OAuth auto-registration, chat routing, and per-account points balance.
+  - Bulk register: paste `gmail:password` lines and the worker automates Google login, intercepts AutoClaw's tokens from the auth response (localStorage fallback), fetches the account's points, and saves the connection. Reuses the shared Google automation + auto-detect concurrency.
+  - Chat: models `openrouter_glm-5.2` (GLM-5.2), `zai_glm-5-turbo` (GLM-5-Turbo), `zai_auto` (DeepSeek-V4-Pro), routed via `autoclaw/<model>`. Uses AutoClaw's signed headers (`X-Authorization`, `X-Request-Model`, MD5 `X-Auth-Sign`) and its own token refresh.
+  - Usage: remaining points shown on the Usage/quota page.
+
 # v1.0.15 (2026-07-01)
 
 Bulk import now auto-tunes worker count to the host — no more CPU pegged at 100% on small VPS.

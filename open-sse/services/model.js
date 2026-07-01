@@ -16,6 +16,8 @@ const ALIAS_TO_PROVIDER_ID = {
   ocg: "opencode-go",
   qd: "qoder",
   qoder: "qoder",
+  acl: "autoclaw",
+  autoclaw: "autoclaw",
   cb: "codebuddy",
   "cb-cn": "codebuddy-cn",
   codebuddy: "codebuddy",

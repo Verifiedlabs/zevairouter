@@ -396,6 +396,38 @@ function AntigravityAutomationPanel({ providerInfo, onRefresh }) {
   );
 }
 
+function AutoClawAutomationPanel({ onRefresh }) {
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => setIsBulkOpen(true)}
+          className="flex min-h-[112px] min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-text-main">
+            <span className="material-symbols-outlined text-[20px] text-primary">group_add</span>
+            Auto Register Bulk
+          </span>
+          <span className="text-xs leading-relaxed text-text-muted">
+            Run bulk gmail:password or gmail|password automation via Google OAuth to register AutoClaw accounts (GLM-5.2, GLM-5-Turbo, DeepSeek-V4). Each new account gets bonus points.
+          </span>
+        </button>
+      </div>
+      <BulkAccountAutomationModal
+        isOpen={isBulkOpen}
+        provider="autoclaw"
+        title="AutoClaw Bulk GSuite Auto Register"
+        serviceName="AutoClaw"
+        onSuccess={onRefresh}
+        onClose={() => setIsBulkOpen(false)}
+      />
+    </>
+  );
+}
+
 const AUTOMATION_PROVIDERS = [
   {
     id: "kiro",
@@ -428,6 +460,14 @@ const AUTOMATION_PROVIDERS = [
     description: "Bulk GSuite auto login via Google OAuth (authorization code).",
     supportedModes: ["bulk-account", "oauth"],
     component: AntigravityAutomationPanel,
+  },
+  {
+    id: "autoclaw",
+    label: "AutoClaw",
+    icon: "bolt",
+    description: "Bulk auto-register via Google OAuth. OpenAI-compatible GLM/DeepSeek proxy.",
+    supportedModes: ["bulk-account"],
+    component: AutoClawAutomationPanel,
   },
 ];
 

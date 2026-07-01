@@ -92,6 +92,11 @@ export const PROVIDER_MODELS = {
     { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Medium)" },
     { id: "gemini-3-flash", name: "Gemini 3 Flash", thinking: false }, // command model; AG strips thinking
   ],
+  acl: [  // AutoClaw (autoclaw.z.ai) - model chosen via X-Request-Model header
+    { id: "openrouter_glm-5.2", name: "GLM-5.2" },
+    { id: "zai_glm-5-turbo", name: "GLM-5-Turbo" },
+    { id: "zai_auto", name: "DeepSeek-V4-Pro (Auto)" },
+  ],
   gh: [  // GitHub Copilot - OpenAI models
     { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
     { id: "gpt-4", name: "GPT-4" },
@@ -929,6 +934,7 @@ const OAUTH_ALIASES = {
   cline: "cl",
   opencode: "oc",
   qoder: "qd",
+  autoclaw: "acl",
   codebuddy: "cb",
   "codebuddy-cn": "cb-cn",
   vertex: "vertex",

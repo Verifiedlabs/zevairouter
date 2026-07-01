@@ -115,6 +115,8 @@ export async function getUsageForProvider(connection, proxyOptions = null) {
       return await getCodeBuddyUsage(accessToken, providerSpecificData, proxyOptions, apiKey, provider);
     case "qoder":
       return await getQoderUsage(accessToken, proxyOptions);
+    case "autoclaw":
+      return await getAutoclawUsage(accessToken, proxyOptions);
     case "qwen":
       return await getQwenUsage(accessToken, providerSpecificData);
     case "iflow":
@@ -1688,5 +1690,43 @@ async function getQoderUsage(accessToken, proxyOptions = null) {
     };
   } catch (error) {
     return { message: `Qoder connected. Unable to fetch usage: ${error.message}` };
+  }
+}
+
+async function getAutoclawUsage(accessToken, proxyOptions = null) {
+  if (!accessToken) {
+    return { message: "AutoClaw usage unavailable: no access token" };
+  }
+  try {
+    const { AUTOCLAW_WALLET_ENDPOINT, buildAutoClawAuthHeaders } = await import("../../src/lib/autoclaw/constants.js");
+    const response = await proxyAwareFetch(
+      AUTOCLAW_WALLET_ENDPOINT,
+      { method: "GET", headers: buildAutoClawAuthHeaders({ authorization: accessToken }) },
+      proxyOptions,
+    );
+    if (!response.ok) {
+      return { message: `AutoClaw connected. Usage fetch returned ${response.status}.` };
+    }
+    const body = await response.json().catch(() => null);
+    if (!body || body.code !== 0) {
+      return { message: "AutoClaw connected. Unable to read balance." };
+    }
+    const total = Number(body.data?.total_balance);
+    const remaining = Number.isFinite(total) ? total : 0;
+    return {
+      quotas: {
+        points: {
+          total: remaining,
+          used: 0,
+          remaining,
+          unit: "points",
+          resetAt: null,
+        },
+      },
+      totalUsagePercentage: 0,
+      isQuotaExceeded: remaining <= 0,
+    };
+  } catch (error) {
+    return { message: `AutoClaw connected. Unable to fetch balance: ${error.message}` };
   }
 }

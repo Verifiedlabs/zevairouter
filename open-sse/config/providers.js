@@ -113,6 +113,13 @@ export const PROVIDERS = {
     clientId: "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
     clientSecret: "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"
   },
+  autoclaw: {
+    // AutoClaw executor builds the full URL + signed headers itself; baseUrl is
+    // kept for introspection helpers.
+    baseUrl: "https://autoglm-api.autoglm.ai/autoclaw-proxy/proxy/autoclaw/chat/completions",
+    format: "openai",
+    headers: {},
+  },
   openrouter: {
     baseUrl: "https://openrouter.ai/api/v1/chat/completions",
     format: "openai",
