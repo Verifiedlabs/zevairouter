@@ -1,3 +1,12 @@
+# v1.0.19 (2026-07-01)
+
+AutoClaw connection fixes + branding cleanup.
+
+## Fixes
+- **AutoClaw test connection**: the connection test now probes AutoClaw's wallet endpoint with its signed headers instead of the generic Bearer flow, fixing the misleading `[500] parse response failed` error on healthy accounts.
+- **AutoClaw token handling**: access tokens are now stored and sent without a leading `Bearer ` prefix, so chat (`X-Authorization`) always receives the raw JWT.
+- **Branding**: replaced remaining "9Router" / `9router` references in the OIDC settings (issuer/client ID placeholders), login, sidebar, MITM, skills, and endpoint UI with ZevaiRouter / the `zevai` CLI command.
+
 # v1.0.18 (2026-07-01)
 
 Automation page now shows real provider logos.

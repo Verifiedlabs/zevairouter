@@ -42,10 +42,14 @@ export class AutoClawExecutor extends BaseExecutor {
     }
 
     const requestModel = String(model || "").replace(/^autoclaw\//, "");
+    // AutoClaw's X-Authorization expects the raw JWT. Tokens captured during
+    // bulk register may be stored with a "Bearer " prefix — strip it so the
+    // header is always the bare token.
+    const rawToken = String(credentials.accessToken).replace(/^Bearer\s+/i, "");
     const ts = String(Math.floor(Date.now() / 1000));
     const headers = {
       "Content-Type": "application/json",
-      "X-Authorization": credentials.accessToken,
+      "X-Authorization": rawToken,
       "X-Request-Id": randomUUID(),
       "X-Request-Model": requestModel,
       "X-Auth-Appid": AUTOCLAW_APP_ID,
@@ -91,7 +95,7 @@ export class AutoClawExecutor extends BaseExecutor {
         AUTOCLAW_REFRESH_ENDPOINT,
         {
           method: "POST",
-          headers: buildAutoClawAuthHeaders({ authorization: credentials.accessToken || "" }),
+          headers: buildAutoClawAuthHeaders({ authorization: String(credentials.accessToken || "").replace(/^Bearer\s+/i, "") }),
           body: JSON.stringify({ refresh_token: credentials.refreshToken }),
         },
         proxyOptions,

@@ -254,6 +254,31 @@ function isTokenExpired(connection) {
 }
 
 async function testOAuthConnection(connection, effectiveProxy = null) {
+  // AutoClaw isn't a standard Bearer OAuth provider: it uses a bare
+  // `authorization: <accessToken>` header plus time-based signed x-auth-*
+  // headers. Probe the wallet endpoint (same call the balance fetch uses) and
+  // treat code:0 as a valid, live token.
+  if (connection.provider === "autoclaw") {
+    if (!connection.accessToken) return { valid: false, error: "No access token", refreshed: false };
+    try {
+      const { AUTOCLAW_WALLET_ENDPOINT, buildAutoClawAuthHeaders } = await import("@/lib/autoclaw/constants");
+      const res = await fetchWithConnectionProxy(
+        AUTOCLAW_WALLET_ENDPOINT,
+        { method: "GET", headers: buildAutoClawAuthHeaders({ authorization: connection.accessToken }) },
+        effectiveProxy,
+      );
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) return { valid: false, error: "Token invalid or revoked", refreshed: false };
+        return { valid: false, error: `AutoClaw API returned ${res.status}`, refreshed: false };
+      }
+      const data = await res.json().catch(() => null);
+      if (data && data.code === 0) return { valid: true, error: null, refreshed: false, newTokens: null };
+      return { valid: false, error: "Token invalid or revoked", refreshed: false };
+    } catch (err) {
+      return { valid: false, error: err.message, refreshed: false };
+    }
+  }
+
   const config = OAUTH_TEST_CONFIG[connection.provider];
   if (!config) return { valid: false, error: "Provider test not supported", refreshed: false };
   if (!connection.accessToken) return { valid: false, error: "No access token", refreshed: false };

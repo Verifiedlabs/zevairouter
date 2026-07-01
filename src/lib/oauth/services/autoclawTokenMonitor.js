@@ -26,9 +26,10 @@ function extractTokens(body) {
   const data = body.data && typeof body.data === "object" ? body.data : body;
   const accessToken = data.access_token || data.accessToken;
   if (!accessToken) return null;
+  // Store the raw JWT — X-Authorization for chat expects it without "Bearer ".
   return {
-    accessToken,
-    refreshToken: data.refresh_token || data.refreshToken || "",
+    accessToken: String(accessToken).replace(/^Bearer\s+/i, ""),
+    refreshToken: String(data.refresh_token || data.refreshToken || "").replace(/^Bearer\s+/i, ""),
   };
 }
 
