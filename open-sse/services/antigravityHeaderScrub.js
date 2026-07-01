@@ -40,8 +40,10 @@ const HEADERS_TO_REMOVE = new Set([
   "sec-fetch-site",
   "sec-fetch-dest",
   "priority",
-  // Encoding: Antigravity (Node.js) sends "gzip, deflate, br"; Electron adds
-  // "zstd" which is a fingerprint mismatch.
+  // Drop any incoming Accept-Encoding. We must NOT set it ourselves either:
+  // undici (Node fetch) only auto-decompresses the response when the request
+  // has no explicit Accept-Encoding. Setting it manually makes undici hand back
+  // the raw gzip/br bytes, which then fail JSON.parse ("Invalid JSON response").
   "accept-encoding",
 ]);
 
@@ -65,7 +67,8 @@ export function scrubProxyAndFingerprintHeaders(headers) {
     }
     cleaned[key] = value;
   }
-  cleaned["Accept-Encoding"] = "gzip, deflate, br";
+  // NOTE: intentionally do NOT set Accept-Encoding — let undici negotiate it and
+  // auto-decompress the response. Setting it manually breaks JSON parsing.
   if (authorizationValue !== undefined) {
     cleaned["Authorization"] = authorizationValue;
   }

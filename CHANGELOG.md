@@ -1,3 +1,11 @@
+# v1.0.24 (2026-07-01)
+
+Fix Antigravity "Invalid JSON response" (all accounts erroring).
+
+## Fixes
+- **Antigravity chat now works again.** The anti-ban header scrub set `Accept-Encoding: gzip, deflate, br` manually. Under Node's fetch (undici), a manually-set Accept-Encoding disables automatic response decompression, so the upstream reply came back as raw gzip/brotli bytes and failed to parse ("Invalid JSON response from antigravity"). We no longer set Accept-Encoding — undici negotiates it and decompresses automatically. Verified with live chats across multiple accounts.
+- Note: accounts whose Google tier requires a user-defined GCP project (`userDefinedCloudaicompanionProject`) still can't auto-onboard a project id — that's a Google account-type requirement, not a router bug. Free/auto-onboard accounts work.
+
 # v1.0.23 (2026-07-01)
 
 AutoClaw balance display + branding cleanup.
