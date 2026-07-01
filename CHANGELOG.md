@@ -1,3 +1,10 @@
+# v1.0.29 (2026-07-01)
+
+Real fix: runtime optional packages no longer pruned (Camoufox stays installed).
+
+## Fixes
+- **Camoufox (and other lazy runtime packages) now persist across restarts.** Root cause: npm v11 prunes any package not listed in the runtime `package.json` on every `npm install`, so `--no-save` (from 1.0.28) actually made each install wipe the others — installing systray2/better-sqlite3 on startup deleted camoufox-js. Runtime installs now use `--save`, recording each optional package as a real dependency so npm keeps them. Verified live: installing systray2 after camoufox no longer removes camoufox.
+
 # v1.0.28 (2026-07-01)
 
 Fix Camoufox/optional runtime packages vanishing on restart.

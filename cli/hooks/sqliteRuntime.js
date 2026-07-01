@@ -80,13 +80,14 @@ function summarizeNpmError(stderr = "") {
 }
 
 function runNpmInstall({ cwd, pkgs, extraArgs = [], timeout = 180000 }) {
-  // --no-save is critical: the runtime dir hosts multiple lazily-installed
-  // optional packages (better-sqlite3, camoufox-js, playwright). Installing one
-  // without --no-save prunes the others (npm reconciles node_modules against
-  // package.json on every install), which is why camoufox-js kept vanishing on
-  // restart. --no-save keeps each install additive.
-  const alreadyNoSave = extraArgs.includes("--no-save");
-  const args = ["install", ...pkgs, "--no-audit", "--no-fund", "--prefer-online", ...(alreadyNoSave ? [] : ["--no-save"]), ...extraArgs];
+  // Use --save (NOT --no-save): the runtime dir hosts several lazily-installed
+  // optional packages (better-sqlite3, camoufox-js, playwright, systray2). npm
+  // v11 prunes anything NOT declared in package.json on every `npm install`, so
+  // --no-save made each install wipe the previously-installed optional packages
+  // (camoufox-js kept vanishing on restart). --save records each package as a
+  // real dependency so npm treats it as legitimate and never prunes it.
+  const filtered = extraArgs.filter((a) => a !== "--no-save");
+  const args = ["install", ...pkgs, "--save", "--no-audit", "--no-fund", "--prefer-online", ...filtered];
 
   // Prefer running npm-cli.js with the SAME Node that's executing us. On hosts
   // where the default `npm`/`/usr/bin/node` is an old Node (e.g. v12), spawning
