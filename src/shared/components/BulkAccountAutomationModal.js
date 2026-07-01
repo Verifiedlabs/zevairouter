@@ -70,8 +70,23 @@ export default function BulkAccountAutomationModal({
   serviceName,
 }) {
   const storageKey = `${provider}-bulk-import-active-job`;
+  const draftKey = `${provider}-bulk-import-accounts-draft`;
   const completedRefreshJobsRef = useRef(new Set());
-  const [bulkText, setBulkText] = useState("");
+  const bulkTextRef = useRef("");
+  const [bulkText, setBulkTextState] = useState("");
+  // Persist the accounts textarea per-provider so switching automation tabs
+  // (which remounts this modal) doesn't wipe what the user already typed.
+  const setBulkText = useCallback((value) => {
+    const next = typeof value === "function" ? value(bulkTextRef.current) : value;
+    bulkTextRef.current = next;
+    setBulkTextState(next);
+    if (typeof window !== "undefined") {
+      try {
+        if (next) window.localStorage.setItem(draftKey, next);
+        else window.localStorage.removeItem(draftKey);
+      } catch { /* ignore quota errors */ }
+    }
+  }, [draftKey]);
   const [concurrency, setConcurrency] = useState(String(DEFAULT_CONCURRENCY));
   const [autoConcurrency, setAutoConcurrency] = useState(true);
   const [engine, setEngine] = useState(DEFAULT_ENGINE);
@@ -84,6 +99,18 @@ export default function BulkAccountAutomationModal({
 
   const runningJob = activeJob && ACTIVE_JOB_STATUSES.has(activeJob.status);
   const finishedJob = activeJob && TERMINAL_JOB_STATUSES.has(activeJob.status);
+
+  // Restore the accounts draft on mount (survives tab switch / modal remount).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = window.localStorage.getItem(draftKey);
+      if (saved) {
+        bulkTextRef.current = saved;
+        setBulkTextState(saved);
+      }
+    } catch { /* ignore */ }
+  }, [draftKey]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -245,7 +272,11 @@ export default function BulkAccountAutomationModal({
       setActiveJob(data.job || null);
       if (data.job?.jobId) {
         completedRefreshJobsRef.current.delete(data.job.jobId);
-        if (typeof window !== "undefined") window.localStorage.setItem(storageKey, data.job.jobId);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(storageKey, data.job.jobId);
+          // Job started — the accounts draft is no longer needed.
+          try { window.localStorage.removeItem(draftKey); } catch { /* ignore */ }
+        }
       }
     } catch (err) {
       setError(err.message);

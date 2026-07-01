@@ -1,3 +1,10 @@
+# v1.0.25 (2026-07-01)
+
+Automation: typed accounts no longer lost when switching tabs.
+
+## Fixes
+- **Bulk automation keeps your typed accounts.** Switching between automation provider tabs (or anything that remounts the modal) used to wipe the accounts textarea, forcing you to paste them again. The accounts draft is now saved per-provider and restored automatically; it's cleared once the job actually starts.
+
 # v1.0.24 (2026-07-01)
 
 Fix Antigravity "Invalid JSON response" (all accounts erroring).
