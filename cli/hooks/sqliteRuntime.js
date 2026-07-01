@@ -80,13 +80,35 @@ function summarizeNpmError(stderr = "") {
 }
 
 function runNpmInstall({ cwd, pkgs, extraArgs = [], timeout = 180000 }) {
-  const args = ["install", ...pkgs, "--no-audit", "--no-fund", "--prefer-online", ...extraArgs];
-  const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
-  const res = spawnSync(npmCmd, args, {
+  // --no-save is critical: the runtime dir hosts multiple lazily-installed
+  // optional packages (better-sqlite3, camoufox-js, playwright). Installing one
+  // without --no-save prunes the others (npm reconciles node_modules against
+  // package.json on every install), which is why camoufox-js kept vanishing on
+  // restart. --no-save keeps each install additive.
+  const alreadyNoSave = extraArgs.includes("--no-save");
+  const args = ["install", ...pkgs, "--no-audit", "--no-fund", "--prefer-online", ...(alreadyNoSave ? [] : ["--no-save"]), ...extraArgs];
+
+  // Prefer running npm-cli.js with the SAME Node that's executing us. On hosts
+  // where the default `npm`/`/usr/bin/node` is an old Node (e.g. v12), spawning
+  // the `npm` shim re-execs under that old runtime and crashes. process.execPath
+  // is the live (new) Node; pair it with its own npm-cli.js when resolvable.
+  let command = process.platform === "win32" ? "npm.cmd" : "npm";
+  let finalArgs = args;
+  let useShell = process.platform === "win32";
+  try {
+    const npmCliPath = path.join(path.dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js");
+    if (fs.existsSync(npmCliPath)) {
+      command = process.execPath;
+      finalArgs = [npmCliPath, ...args];
+      useShell = false;
+    }
+  } catch { /* fall back to npm shim */ }
+
+  const res = spawnSync(command, finalArgs, {
     cwd,
     stdio: ["ignore", "pipe", "pipe"],
     timeout,
-    shell: process.platform === "win32",
+    shell: useShell,
     encoding: "utf8",
   });
   return { ok: res.status === 0, code: res.status, stderr: res.stderr || "", stdout: res.stdout || "" };

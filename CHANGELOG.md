@@ -1,3 +1,11 @@
+# v1.0.28 (2026-07-01)
+
+Fix Camoufox/optional runtime packages vanishing on restart.
+
+## Fixes
+- **Lazily-installed runtime packages no longer prune each other.** The runtime installer ran `npm install <pkg>` without `--no-save`, so installing one optional package (e.g. better-sqlite3 on startup) pruned the others (camoufox-js, playwright) — which is why Camoufox worked once then broke after a restart. All runtime installs are now `--no-save` (additive).
+- **Runtime npm install uses the running Node.** On hosts where the default `npm`/`node` is an old version (e.g. Node 12 via `/usr/bin/node`), the installer re-exec'd under it and crashed. It now runs npm-cli.js with the same Node that's executing the app.
+
 # v1.0.27 (2026-07-01)
 
 Fix Camoufox engine "installed but cannot be required".
