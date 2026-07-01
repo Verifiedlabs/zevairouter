@@ -1,6 +1,6 @@
 # v0.4.84 (2026-06-14)
 
-Synced automation, CodeBuddy/Qoder, and auth/quota hardening from upstream (9router_wyx0 v0.4.81–v0.4.84). Runtime identifiers (`wyxrouter` bin, `~/.9router` data dir, upstream API hosts) are unchanged; user-facing surfaces are branded ZevaiRouter.
+Synced automation, CodeBuddy/Qoder, and auth/quota hardening from upstream. The CLI binary is `zevai` and data lives in `~/.zevai` (an existing `~/.9router` dir is auto-migrated on first run). All user-facing surfaces are branded ZevaiRouter.
 
 ## Bulk Import — Standalone Playwright Hotfix
 - Fixed bulk import failing in production (`npm run start`) with a misleading "Playwright not available. playwright installed but cannot be required" error even when Playwright and Chromium were installed correctly.
@@ -247,7 +247,7 @@ Synced automation, CodeBuddy/Qoder, and auth/quota hardening from upstream (9rou
 
 ## Features
 - Add MiniMax TTS provider support (#1043)
-- Docker images now published on both Docker Hub (`decolua/9router`) and GHCR — pull from your preferred registry
+- Docker images now published on both Docker Hub and GHCR — pull from your preferred registry
 
 ## Improvements
 - Replace browser confirm dialogs with custom ConfirmModal (#1060)
