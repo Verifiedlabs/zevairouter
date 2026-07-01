@@ -116,7 +116,7 @@ export async function getUsageForProvider(connection, proxyOptions = null) {
     case "qoder":
       return await getQoderUsage(accessToken, proxyOptions);
     case "autoclaw":
-      return await getAutoclawUsage(accessToken, proxyOptions);
+      return await getAutoclawUsage(accessToken, proxyOptions, connection);
     case "qwen":
       return await getQwenUsage(accessToken, providerSpecificData);
     case "iflow":
@@ -1693,7 +1693,7 @@ async function getQoderUsage(accessToken, proxyOptions = null) {
   }
 }
 
-async function getAutoclawUsage(accessToken, proxyOptions = null) {
+async function getAutoclawUsage(accessToken, proxyOptions = null, connection = null) {
   if (!accessToken) {
     return { message: "AutoClaw usage unavailable: no access token" };
   }
@@ -1713,17 +1713,37 @@ async function getAutoclawUsage(accessToken, proxyOptions = null) {
     }
     const total = Number(body.data?.total_balance);
     const remaining = Number.isFinite(total) ? total : 0;
+
+    // AutoClaw's wallet only returns the CURRENT balance, not how much was spent.
+    // To show real consumption, track the highest balance ever seen (baseline)
+    // in the cached snapshot: used = baseline - remaining. Baseline grows if the
+    // account is topped up.
+    let baseline = remaining;
+    try {
+      if (connection?.id) {
+        const { getQuotaSnapshot } = await import("@/lib/localDb.js");
+        const prev = await getQuotaSnapshot(connection.id);
+        const prevBaseline = Number(prev?.usage?.quotas?.points?.total) || 0;
+        const prevRemaining = Number(prev?.usage?.quotas?.points?.remaining);
+        // Baseline = max(prev baseline, current remaining). If balance jumped
+        // above the old baseline (top-up), adopt the new higher value.
+        baseline = Math.max(prevBaseline, remaining, Number.isFinite(prevRemaining) ? prevRemaining : 0);
+      }
+    } catch { /* first run / no snapshot */ }
+
+    const used = Math.max(0, baseline - remaining);
+    const pct = baseline > 0 ? Math.round((remaining / baseline) * 100) : 0;
     return {
       quotas: {
         points: {
-          total: remaining,
-          used: 0,
+          total: baseline,
+          used,
           remaining,
           unit: "points",
           resetAt: null,
         },
       },
-      totalUsagePercentage: 0,
+      totalUsagePercentage: baseline > 0 ? Math.round((used / baseline) * 100) : 0,
       isQuotaExceeded: remaining <= 0,
     };
   } catch (error) {

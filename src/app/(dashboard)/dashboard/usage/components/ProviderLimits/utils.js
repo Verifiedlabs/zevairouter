@@ -185,6 +185,24 @@ export function parseQuotaData(provider, data) {
         }
         break;
 
+      case "autoclaw":
+        // AutoClaw wallet returns absolute points. total = baseline (peak
+        // balance seen), used = baseline - remaining, so the bar reflects real
+        // consumption. Drop the absolute `remaining` field (QuotaTable would
+        // render it as a percentage); percentage is computed from used/total.
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([quotaType, quota]) => {
+            normalizedQuotas.push({
+              name: quotaType === "points" ? "Points" : quotaType,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              unit: quota.unit,
+              resetAt: quota.resetAt || null,
+            });
+          });
+        }
+        break;
+
       case "claude":
         if (data.message) {
           // Handle error message case
@@ -194,8 +212,7 @@ export function parseQuotaData(provider, data) {
             total: 0,
             resetAt: null,
             message: data.message,
-          });
-        } else if (data.quotas) {
+          });        } else if (data.quotas) {
           Object.entries(data.quotas).forEach(([name, quota]) => {
             normalizedQuotas.push({
               name,

@@ -1,3 +1,11 @@
+# v1.0.23 (2026-07-01)
+
+AutoClaw balance display + branding cleanup.
+
+## Fixes
+- **AutoClaw balance now shows real consumption**: the wallet API only returns the current balance (not spend), so points appeared static. It now tracks a baseline (peak balance seen) and shows `used = baseline − remaining`, so the Usage bar reflects points actually consumed. Note: balance refreshes on the ~5-minute quota sweep, not instantly after each chat.
+- **Branding**: replaced remaining visible "9Router" text in the CLI Tools cards (MITM server, Antigravity, Droid, jcode, OpenCode) and MITM UI with ZevaiRouter. Functional identifiers (config profile keys, model ids like `custom:9Router-*`, cert names, data-dir name) are intentionally left unchanged to avoid breaking existing user setups.
+
 # v1.0.22 (2026-07-01)
 
 Bulk upload for Context Injection.
