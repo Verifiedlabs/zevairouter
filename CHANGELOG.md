@@ -1,3 +1,10 @@
+# v1.0.27 (2026-07-01)
+
+Fix Camoufox engine "installed but cannot be required".
+
+## Fixes
+- **Camoufox bulk-import engine now loads reliably.** The lazily-installed `camoufox-js` package lives in `~/.zevai/runtime/node_modules`, but the standalone server's bundled require couldn't resolve it (MODULE_NOT_FOUND from a non-project cwd), even though the package and its browser binary were present. We now load it with a runtime-anchored `createRequire`, which uses real Node resolution and works from any working directory.
+
 # v1.0.26 (2026-07-01)
 
 Removed the Skills page.

@@ -5,6 +5,7 @@
 // Camoufox in the bulk-import modal we install lazily \u2014 same shape as the
 // sqlite/playwright runtime helpers \u2014 instead of failing the worker.
 const { spawnSync } = require("child_process");
+const { createRequire } = require("module");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -22,15 +23,38 @@ const CAMOUFOX_VERSION = "^0.11.0";
 const nodeRequire =
   typeof __non_webpack_require__ === "function" ? __non_webpack_require__ : require;
 
+// A require() anchored at the runtime node_modules dir. createRequire is real
+// Node resolution (never touched by webpack), so it reliably loads the lazily
+// installed camoufox-js from ~/.zevai/runtime regardless of the process cwd or
+// the standalone bundle's module registry.
+function getRuntimeRequire() {
+  try {
+    const anchor = path.join(getRuntimeDir(), "noop.js");
+    return createRequire(anchor);
+  } catch {
+    return null;
+  }
+}
+
 let cachedReady = null;
 
 function tryRequireCamoufox() {
+  // 1) Direct absolute-path resolution via a runtime-anchored createRequire —
+  //    the most robust path (works from any cwd, bypasses webpack's registry).
+  try {
+    const rreq = getRuntimeRequire();
+    const candidate = path.join(getRuntimeNodeModules(), CAMOUFOX_PACKAGE);
+    if (rreq && fs.existsSync(path.join(candidate, "package.json"))) {
+      return rreq(candidate);
+    }
+  } catch {}
+  // 2) Bare require (works when camoufox-js is globally resolvable, e.g. dev).
   try {
     return nodeRequire(CAMOUFOX_PACKAGE);
   } catch {}
+  // 3) Last resort: bundler require against the absolute path.
   try {
-    const runtimeNm = getRuntimeNodeModules();
-    const candidate = path.join(runtimeNm, CAMOUFOX_PACKAGE);
+    const candidate = path.join(getRuntimeNodeModules(), CAMOUFOX_PACKAGE);
     if (fs.existsSync(path.join(candidate, "package.json"))) {
       return nodeRequire(candidate);
     }
