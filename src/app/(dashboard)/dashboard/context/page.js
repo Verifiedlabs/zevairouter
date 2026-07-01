@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, Button, Input, Toggle, Badge, ConfirmModal } from "@/shared/components";
 
 function bytesLabel(str) {
@@ -17,6 +17,8 @@ export default function ContextPage() {
   const [editing, setEditing] = useState(null); // {id?, name, content, enabled}
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [status, setStatus] = useState({ type: "", message: "" });
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,6 +108,32 @@ export default function ContextPage() {
     }
   };
 
+  const handleUpload = async (e) => {
+    const fileList = Array.from(e.target.files || []);
+    if (fileList.length === 0) return;
+    setUploading(true);
+    setStatus({ type: "", message: "" });
+    try {
+      const files = await Promise.all(
+        fileList.map(async (f) => ({ name: f.name, content: await f.text() }))
+      );
+      const res = await fetch("/api/context/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ files }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Upload failed");
+      await load();
+      setStatus({ type: "success", message: `Uploaded ${data.created} file(s) — all disabled by default. Enable the ones you want below.` });
+    } catch (err) {
+      setStatus({ type: "error", message: err.message || "Upload failed." });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const enabledCount = files.filter((f) => f.enabled).length;
   const totalBytes = files.filter((f) => f.enabled).reduce((n, f) => n + new TextEncoder().encode(f.content || "").length, 0);
 
@@ -139,10 +167,23 @@ export default function ContextPage() {
 
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-text-main">Files</h2>
-        <Button size="sm" onClick={() => setEditing({ name: "", content: "", enabled: true })}>
-          <span className="material-symbols-outlined text-[16px] mr-1">add</span>
-          Add File
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleUpload}
+          />
+          <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+            <span className="material-symbols-outlined text-[16px] mr-1">upload_file</span>
+            {uploading ? "Uploading…" : "Upload .md"}
+          </Button>
+          <Button size="sm" onClick={() => setEditing({ name: "", content: "", enabled: true })}>
+            <span className="material-symbols-outlined text-[16px] mr-1">add</span>
+            Add File
+          </Button>
+        </div>
       </div>
 
       {loading ? (

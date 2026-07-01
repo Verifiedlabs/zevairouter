@@ -1,3 +1,11 @@
+# v1.0.22 (2026-07-01)
+
+Bulk upload for Context Injection.
+
+## Features
+- **Upload .md** button on the Context Inject page: multi-select many markdown files at once (e.g. a whole agent framework like SUPERAGENT). Each file becomes a context entry — the file name is the entry name, its content the injected text.
+- Uploaded files are **disabled by default** so importing dozens of files doesn't inflate token cost on every request. Enable only the core files (SOUL, AGENTS, USER, registry) you actually want injected.
+
 # v1.0.21 (2026-07-01)
 
 Fix AutoClaw balance / "Unable to read balance".

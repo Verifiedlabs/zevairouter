@@ -36,7 +36,7 @@ export {
 // Context files (user-authored system-prompt injection)
 export {
   listContextFiles, getEnabledContextFiles, getContextFile,
-  createContextFile, updateContextFile, deleteContextFile,
+  createContextFile, createContextFilesBulk, updateContextFile, deleteContextFile,
 } from "./repos/contextFilesRepo.js";
 
 // API keys

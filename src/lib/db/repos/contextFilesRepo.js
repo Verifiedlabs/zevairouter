@@ -93,3 +93,32 @@ export async function deleteContextFile(id) {
   invalidateCache();
   return true;
 }
+
+// Bulk insert (multi-file upload). Files default to DISABLED so uploading a
+// whole framework (e.g. dozens of .md) doesn't blow up token cost on every
+// request — the user enables the few they want. Priority continues after the
+// current max so order is stable.
+export async function createContextFilesBulk(files = []) {
+  if (!Array.isArray(files) || files.length === 0) return [];
+  const db = await getAdapter();
+  const startPriorityRow = db.get(`SELECT COALESCE(MAX(priority), -1) AS maxp FROM contextFiles`);
+  let priority = (Number(startPriorityRow?.maxp) || -1) + 1;
+  const created = [];
+  db.transaction(() => {
+    for (const f of files) {
+      const name = String(f?.name || "untitled").trim() || "untitled";
+      const content = String(f?.content || "");
+      const id = uuidv4();
+      const now = new Date().toISOString();
+      db.run(
+        `INSERT INTO contextFiles(id, name, content, enabled, priority, createdAt, updatedAt)
+         VALUES(?, ?, ?, 0, ?, ?, ?)`,
+        [id, name, content, priority, now, now]
+      );
+      created.push({ id, name });
+      priority += 1;
+    }
+  });
+  invalidateCache();
+  return created;
+}

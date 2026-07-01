@@ -13,7 +13,7 @@ export {
   saveQuotaSnapshot, getQuotaSnapshot, getAllQuotaSnapshots,
   deleteQuotaSnapshot, getCachedRemainingPercent,
   listContextFiles, getEnabledContextFiles, getContextFile,
-  createContextFile, updateContextFile, deleteContextFile,
+  createContextFile, createContextFilesBulk, updateContextFile, deleteContextFile,
   getApiKeys, getApiKeyById, createApiKey, updateApiKey, deleteApiKey, validateApiKey,
   getCombos, getComboById, getComboByName,
   createCombo, updateCombo, deleteCombo,
